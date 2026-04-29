@@ -399,6 +399,12 @@ Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
 
+### v1.7.1 Highlights
+
+Republish of v1.7.0 from the correct commit. The v1.7.0 tarball on npm was inadvertently published from a pre-rebase tree that did not include the v1.6.1 codex continuity fixes (PR #62) or the v1.6.2 plan doc. v1.7.1 ships the same coding-agent-roster expansion on top of the correct v1.6.1+ history.
+
+Use v1.7.1 instead of v1.7.0; v1.7.0 has been deprecated on npm.
+
 ### v1.7.0 Highlights
 
 Extended CLI provider roster — every coding agent recognized by SwarmSkills now has a corresponding CLI provider in SwarmClaw, routed through a generic streamer when no bespoke parser exists.
