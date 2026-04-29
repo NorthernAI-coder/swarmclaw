@@ -399,6 +399,15 @@ Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
 
+### v1.7.0 Highlights
+
+Extended CLI provider roster — every coding agent recognized by SwarmSkills now has a corresponding CLI provider in SwarmClaw, routed through a generic streamer when no bespoke parser exists.
+
+- **31 new CLI providers.** Aider, Amp, Augment, AdaL, IBM Bob, Cline, CodeBuddy, Command Code, Continue, Cortex Code, Crush, Deep Agents, Firebender, iFlow, Junie, Kilo Code, Kimi, Kode, MCPJam, Mistral Vibe, Mux, Neovate, OpenHands, Pochi, Qoder, Replit Agent, Roo Code, TRAE CN, Warp Agent, Windsurf, and Zencoder are now first-class provider IDs in `ProviderType`.
+- **Generic CLI streamer.** New `streamGenericCliChat` (`src/lib/providers/generic-cli.ts`) spawns the configured binary with the prompt as final argv and emits stdout lines as SSE deltas. Used by the new providers when no bespoke parser is available; existing bespoke parsers (Claude, Codex, Cursor, Gemini, Copilot, Droid, Qwen, OpenCode, Goose) are untouched.
+- **Capability metadata.** `CLI_PROVIDER_CAPABILITIES` (`src/lib/providers/cli-utils.ts`) carries a one-line description for each new provider so the UI and `isCliProvider()` recognize them.
+- **Tests.** New `generic-cli.test.ts` exercises the streamer against `echo` and asserts the missing-binary error path; `cli-utils.test.ts` extends the CLI provider recognition coverage.
+
 ### v1.6.1 Highlights
 
 Follow-up release for v1.6 with workflow starts, safer metadata handling, A2A discovery polish, and [#61](https://github.com/swarmclawai/swarmclaw/pull/61) by [@latentwill](https://github.com/latentwill). Thanks latentwill!

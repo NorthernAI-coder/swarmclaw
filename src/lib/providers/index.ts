@@ -8,6 +8,7 @@ import { streamDroidCliChat } from './droid-cli'
 import { streamCursorCliChat } from './cursor-cli'
 import { streamQwenCodeCliChat } from './qwen-code-cli'
 import { streamGooseChat } from './goose'
+import { streamGenericCliChat, GENERIC_CLI_BINARIES } from './generic-cli'
 import { streamOpenAiChat } from './openai'
 import { streamOllamaChat } from './ollama'
 import { streamAnthropicChat } from './anthropic'
@@ -49,6 +50,59 @@ export interface StreamChatOptions {
 
 interface BuiltinProviderConfig extends ProviderInfo {
   handler: ProviderHandler
+}
+
+const GENERIC_CLI_DISPLAY_NAMES: Record<string, string> = {
+  'aider-cli': 'Aider CLI',
+  'amp-cli': 'Amp CLI',
+  'augment-cli': 'Augment CLI',
+  'adal-cli': 'AdaL CLI',
+  'bob-cli': 'IBM Bob CLI',
+  'cline-cli': 'Cline CLI',
+  'codebuddy-cli': 'CodeBuddy CLI',
+  'command-code-cli': 'Command Code CLI',
+  'continue-cli': 'Continue CLI',
+  'cortex-cli': 'Cortex Code CLI',
+  'crush-cli': 'Crush CLI',
+  'deepagents-cli': 'Deep Agents CLI',
+  'firebender-cli': 'Firebender CLI',
+  'iflow-cli': 'iFlow CLI',
+  'junie-cli': 'Junie CLI',
+  'kilo-code-cli': 'Kilo Code CLI',
+  'kimi-cli': 'Kimi Code CLI',
+  'kode-cli': 'Kode CLI',
+  'mcpjam-cli': 'MCPJam CLI',
+  'mistral-vibe-cli': 'Mistral Vibe CLI',
+  'mux-cli': 'Mux CLI',
+  'neovate-cli': 'Neovate CLI',
+  'openhands-cli': 'OpenHands CLI',
+  'pochi-cli': 'Pochi CLI',
+  'qoder-cli': 'Qoder CLI',
+  'replit-cli': 'Replit Agent CLI',
+  'roo-code-cli': 'Roo Code CLI',
+  'trae-cn-cli': 'TRAE CN CLI',
+  'warp-cli': 'Warp Agent CLI',
+  'windsurf-cli': 'Windsurf CLI',
+  'zencoder-cli': 'Zencoder CLI',
+}
+
+function buildGenericCliEntries(): Record<string, BuiltinProviderConfig> {
+  const entries: Record<string, BuiltinProviderConfig> = {}
+  for (const [providerId, binaryName] of Object.entries(GENERIC_CLI_BINARIES)) {
+    const displayName = GENERIC_CLI_DISPLAY_NAMES[providerId] ?? providerId
+    entries[providerId] = {
+      id: providerId,
+      name: displayName,
+      models: ['default'],
+      requiresApiKey: false,
+      optionalApiKey: true,
+      requiresEndpoint: false,
+      handler: {
+        streamChat: (opts) => streamGenericCliChat({ ...opts, binaryName, displayName }),
+      },
+    }
+  }
+  return entries
 }
 
 export const PROVIDERS: Record<string, BuiltinProviderConfig> = {
@@ -223,6 +277,7 @@ export const PROVIDERS: Record<string, BuiltinProviderConfig> = {
     requiresEndpoint: false,
     handler: { streamChat: streamGooseChat },
   },
+  ...buildGenericCliEntries(),
   google: {
     id: 'google',
     name: 'Google Gemini',
@@ -475,7 +530,7 @@ export function getProviderList(): ProviderInfo[] {
         ...info,
         models: overrides[info.id] || info.models,
         defaultModels: info.models,
-        supportsModelDiscovery: !['claude-cli', 'codex-cli', 'opencode-cli', 'gemini-cli', 'copilot-cli', 'droid-cli', 'cursor-cli', 'qwen-code-cli', 'goose', 'fireworks'].includes(info.id),
+        supportsModelDiscovery: !['claude-cli', 'codex-cli', 'opencode-cli', 'gemini-cli', 'copilot-cli', 'droid-cli', 'cursor-cli', 'qwen-code-cli', 'goose', 'fireworks', ...Object.keys(GENERIC_CLI_BINARIES)].includes(info.id),
       }
     })
   

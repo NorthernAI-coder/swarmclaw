@@ -110,6 +110,16 @@ describe('isCliProvider', () => {
     assert.equal(isCliProvider('goose'), true)
   })
 
+  it('returns true for the extended generic-cli roster', () => {
+    const sample = [
+      'aider-cli', 'cline-cli', 'continue-cli', 'windsurf-cli', 'warp-cli',
+      'roo-code-cli', 'kilo-code-cli', 'qoder-cli', 'openhands-cli', 'kimi-cli',
+    ]
+    for (const id of sample) {
+      assert.equal(isCliProvider(id), true, `${id} should be recognized as a CLI provider`)
+    }
+  })
+
   it('returns false for non-CLI providers', () => {
     assert.equal(isCliProvider('openai'), false)
     assert.equal(isCliProvider('anthropic'), false)
