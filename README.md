@@ -8,13 +8,13 @@
   <img src="https://raw.githubusercontent.com/swarmclawai/swarmclaw/main/public/branding/swarmclaw-org-avatar.png" alt="SwarmClaw lobster logo" width="120" />
 </p>
 
-<p align="center"><strong>Self-hosted runtime for autonomous AI agents.</strong> Multi-provider, MCP-native, with memory, skills, delegation, and schedules.</p>
+<p align="center"><strong>The self-hosted AI agent runtime and multi-agent framework for autonomous agents.</strong> Open-source agent swarms with durable agent memory, MCP tools, skills, delegation, schedules, and 23+ LLM providers — a practical Claude Code and LangChain alternative.</p>
 
 <p align="center">
   <img src="doc/assets/screenshots/org-chart.png" alt="SwarmClaw org chart with delegation and live agent activity" width="900" />
 </p>
 
-SwarmClaw is a self-hosted AI runtime for OpenClaw and multi-agent work. It helps you run autonomous agents and orchestrators with heartbeats, schedules, delegation, memory, runtime skills, and reviewed conversation-to-skill learning across OpenClaw gateways and other providers.
+SwarmClaw is an open-source, self-hosted AI agent runtime and multi-agent framework. Run autonomous AI agents, agent swarms, and orchestrators with heartbeats, schedules, delegation, agent memory, runtime skills, and reviewed conversation-to-skill learning — across OpenClaw gateways, Claude, GPT, Gemini, OpenRouter, Ollama, and 23+ other providers. Use it as your AI agent dashboard, agent orchestration platform, and home base for self-hosted multi-agent AI workflows.
 
 GitHub: https://github.com/swarmclawai/swarmclaw  
 Docs: https://swarmclaw.ai/docs  
