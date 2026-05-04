@@ -7,6 +7,9 @@ import { useAppStore } from '@/stores/use-app-store'
 import { toast } from 'sonner'
 import type {
   OpenClawDevicePairRequest,
+  OpenClawGatewayPresenceEntry,
+  OpenClawGatewayRpcError,
+  OpenClawGatewaySession,
   OpenClawNode,
   OpenClawNodePairRequest,
   OpenClawPairedDevice,
@@ -76,6 +79,9 @@ export function GatewaySheet() {
   const [nodePairings, setNodePairings] = useState<OpenClawNodePairRequest[]>([])
   const [devicePairings, setDevicePairings] = useState<OpenClawDevicePairRequest[]>([])
   const [pairedDevices, setPairedDevices] = useState<OpenClawPairedDevice[]>([])
+  const [gatewaySessions, setGatewaySessions] = useState<OpenClawGatewaySession[]>([])
+  const [gatewayPresence, setGatewayPresence] = useState<OpenClawGatewayPresenceEntry[]>([])
+  const [gatewayTopologyErrors, setGatewayTopologyErrors] = useState<OpenClawGatewayRpcError[]>([])
   const [invokeNodeId, setInvokeNodeId] = useState('')
   const [invokeCommand, setInvokeCommand] = useState('')
   const [invokeParamsText, setInvokeParamsText] = useState('{}')
@@ -113,6 +119,9 @@ export function GatewaySheet() {
     setNodePairings([])
     setDevicePairings([])
     setPairedDevices([])
+    setGatewaySessions([])
+    setGatewayPresence([])
+    setGatewayTopologyErrors([])
     setInvokeNodeId('')
     setInvokeCommand('')
     setInvokeParamsText('{}')
@@ -130,6 +139,9 @@ export function GatewaySheet() {
       setNodePairings(result.nodePairings)
       setDevicePairings(result.devicePairings)
       setPairedDevices(result.pairedDevices)
+      setGatewaySessions(result.sessions)
+      setGatewayPresence(result.presence)
+      setGatewayTopologyErrors(result.errors)
       if (result.nodes[0]) {
         setInvokeNodeId((current) => current || result.nodes[0].nodeId)
         setInvokeCommand((current) => current || result.nodes[0].commands?.[0] || '')
@@ -529,6 +541,37 @@ export function GatewaySheet() {
           {nodesError && (
             <div className="mb-4 rounded-[12px] border border-red-400/20 bg-red-400/[0.06] px-3 py-2 text-[12px] text-red-200">
               {nodesError}
+            </div>
+          )}
+
+          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+              <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/55">Nodes</div>
+              <div className="mt-1 font-display text-[18px] font-700 text-text">{nodes.filter((node) => node.connected).length}/{nodes.length}</div>
+            </div>
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+              <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/55">Pairings</div>
+              <div className="mt-1 font-display text-[18px] font-700 text-amber-300">{nodePairings.length + devicePairings.length}</div>
+            </div>
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+              <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/55">Sessions</div>
+              <div className="mt-1 font-display text-[18px] font-700 text-text">{gatewaySessions.length}</div>
+            </div>
+            <div className={`rounded-[12px] border px-3 py-2 ${
+              gatewayTopologyErrors.length > 0
+                ? 'border-rose-400/20 bg-rose-400/[0.06]'
+                : 'border-white/[0.06] bg-white/[0.025]'
+            }`}>
+              <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/55">Presence</div>
+              <div className={gatewayTopologyErrors.length > 0 ? 'mt-1 font-display text-[18px] font-700 text-rose-200' : 'mt-1 font-display text-[18px] font-700 text-text'}>
+                {gatewayPresence.length}
+              </div>
+            </div>
+          </div>
+
+          {gatewayTopologyErrors.length > 0 && (
+            <div className="mb-4 rounded-[12px] border border-rose-400/20 bg-rose-400/[0.06] px-3 py-2 text-[12px] text-rose-200">
+              {gatewayTopologyErrors[0]?.method}: {gatewayTopologyErrors[0]?.message}
             </div>
           )}
 

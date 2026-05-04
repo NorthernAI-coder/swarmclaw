@@ -7,6 +7,7 @@ export type OperationPulseActionKind =
   | 'run'
   | 'approval'
   | 'connector'
+  | 'gateway'
   | 'budget'
   | 'quality'
 
@@ -16,6 +17,7 @@ export interface OperationPulseKpis {
   failedRuns: number
   pendingApprovals: number
   connectorAttention: number
+  gatewayAttention: number
   budgetWarnings: number
 }
 

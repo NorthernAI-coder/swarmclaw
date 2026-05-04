@@ -399,6 +399,14 @@ Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
 
+### v1.8.12 Highlights
+
+Gateway Fleet Command release: SwarmClaw now treats OpenClaw gateways as an operator surface instead of a background provider detail.
+
+- **Fleet topology API.** Added gateway topology endpoints that collect OpenClaw nodes, node pairings, device pairings, sessions, presence, and best-effort RPC errors in one server-side snapshot.
+- **Provider console controls.** The Providers screen can refresh a whole gateway fleet or a single gateway topology, showing sessions, presence, pending pairings, and topology warnings alongside deploy and runtime health.
+- **Operations Pulse coverage.** Degraded gateways, stale topology, failed topology refreshes, and pending OpenClaw pairings now appear in the shared operator triage queue.
+
 ### v1.8.11 Highlights
 
 DeepSeek tool-use hotfix for issue [#67](https://github.com/swarmclawai/swarmclaw/issues/67).

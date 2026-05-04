@@ -272,6 +272,8 @@ const COMMAND_GROUPS = [
       cmd('update', 'PUT', '/gateways/:id', 'Update a gateway profile', { expectsJsonBody: true }),
       cmd('delete', 'DELETE', '/gateways/:id', 'Delete a gateway profile'),
       cmd('health', 'GET', '/gateways/:id/health', 'Run a gateway health check'),
+      cmd('topology', 'GET', '/gateways/:id/topology', 'Refresh and return one gateway topology snapshot'),
+      cmd('fleet', 'GET', '/gateways/fleet', 'Refresh and return fleet-wide gateway topology'),
     ],
   },
   {

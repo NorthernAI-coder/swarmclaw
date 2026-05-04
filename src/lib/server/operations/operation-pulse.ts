@@ -1,11 +1,13 @@
 import { listPendingApprovals } from '@/lib/server/approvals'
 import { getConnectorReadiness } from '@/lib/connectors/connector-readiness'
 import { loadConnectors } from '@/lib/server/connectors/connector-repository'
+import { listOpenClawGatewayProfiles } from '@/lib/server/gateways/gateway-profile-service'
 import { listMissions } from '@/lib/server/missions/mission-repository'
 import { listUnifiedRuns } from '@/lib/server/runs/unified-run-queries'
 import type {
   ApprovalRequest,
   Connector,
+  GatewayProfile,
   Mission,
   OperationPulse,
   OperationPulseAction,
@@ -26,6 +28,7 @@ const SEVERITY_RANK: Record<OperationPulseSeverity, number> = {
 }
 
 const ACTIVE_MISSION_STATUSES = new Set<Mission['status']>(['running', 'paused'])
+const GATEWAY_TOPOLOGY_STALE_MS = 30 * 60_000
 
 export function normalizeOperationPulseRange(value: string | null | undefined): OperationPulseRange {
   return value === '7d' ? '7d' : '24h'
@@ -68,6 +71,67 @@ function addAction(actions: OperationPulseAction[], action: OperationPulseAction
   actions.push(action)
 }
 
+function gatewayPendingPairings(gateway: GatewayProfile): number {
+  return (gateway.stats?.pendingNodePairings || 0) + (gateway.stats?.pendingDevicePairings || 0)
+}
+
+function gatewayAttentionReason(gateway: GatewayProfile, now: number): {
+  severity: OperationPulseSeverity
+  summary: string
+  evidence: string[]
+} | null {
+  const pendingPairings = gatewayPendingPairings(gateway)
+  const errorCount = gateway.stats?.lastTopologyErrorCount || 0
+  const checkedAt = gateway.stats?.lastTopologyCheckedAt || gateway.lastCheckedAt || null
+  const staleTopology = !checkedAt || now - checkedAt > GATEWAY_TOPOLOGY_STALE_MS
+  const evidence = [
+    `status:${gateway.status}`,
+    `${gateway.stats?.connectedNodeCount || 0}/${gateway.stats?.nodeCount || 0} nodes`,
+  ]
+
+  if (gateway.status === 'offline') {
+    return {
+      severity: 'high',
+      summary: `${gateway.name} is offline${gateway.lastError ? `: ${gateway.lastError}` : '.'}`,
+      evidence,
+    }
+  }
+
+  if (gateway.status === 'degraded') {
+    return {
+      severity: 'high',
+      summary: `${gateway.name} is degraded${gateway.lastError ? `: ${gateway.lastError}` : '.'}`,
+      evidence,
+    }
+  }
+
+  if (errorCount > 0) {
+    return {
+      severity: 'medium',
+      summary: `${gateway.name} topology refresh reported ${errorCount} error${errorCount === 1 ? '' : 's'}.`,
+      evidence: [...evidence, gateway.stats?.lastTopologyError || 'topology error'].filter(Boolean),
+    }
+  }
+
+  if (pendingPairings > 0) {
+    return {
+      severity: 'medium',
+      summary: `${gateway.name} has ${pendingPairings} pending OpenClaw pairing request${pendingPairings === 1 ? '' : 's'}.`,
+      evidence: [...evidence, `${pendingPairings} pending pairings`],
+    }
+  }
+
+  if (staleTopology) {
+    return {
+      severity: 'medium',
+      summary: `${gateway.name} topology has not been refreshed in the last 30 minutes.`,
+      evidence,
+    }
+  }
+
+  return null
+}
+
 function sortActions(actions: OperationPulseAction[]): OperationPulseAction[] {
   return [...actions]
     .sort((left, right) => {
@@ -85,6 +149,7 @@ export function buildOperationPulse(input: {
   runs: SessionRunRecord[]
   approvals: ApprovalRequest[]
   connectors: Connector[]
+  gateways?: GatewayProfile[]
 }): OperationPulse {
   const windowStart = input.now - RANGE_MS[input.range]
   const windowRuns = input.runs.filter((run) => run.status === 'running' || run.status === 'queued' || isWithinWindow(runActivityAt(run), windowStart))
@@ -94,6 +159,9 @@ export function buildOperationPulse(input: {
   const pendingApprovals = input.approvals.filter((approval) => approval.status === 'pending')
   const connectorReadiness = input.connectors.map((connector) => ({ connector, readiness: getConnectorReadiness(connector) }))
   const connectorAttention = connectorReadiness.filter((item) => item.readiness.state !== 'healthy')
+  const gatewayAttention = (input.gateways || [])
+    .map((gateway) => ({ gateway, reason: gatewayAttentionReason(gateway, input.now) }))
+    .filter((item): item is { gateway: GatewayProfile; reason: NonNullable<ReturnType<typeof gatewayAttentionReason>> } => Boolean(item.reason))
   const budgetWarnings = input.missions
     .map((mission) => ({ mission, pressure: budgetPressure(mission, input.now) }))
     .filter((item) => item.pressure)
@@ -141,6 +209,19 @@ export function buildOperationPulse(input: {
     })
   }
 
+  for (const item of gatewayAttention.slice(0, 5)) {
+    addAction(actions, {
+      id: `gateway:${item.gateway.id}`,
+      kind: 'gateway',
+      severity: item.reason.severity,
+      title: 'Review OpenClaw gateway',
+      summary: item.reason.summary,
+      href: '/providers',
+      evidence: item.reason.evidence,
+      createdAt: item.gateway.stats?.lastTopologyCheckedAt || item.gateway.lastCheckedAt || item.gateway.updatedAt || item.gateway.createdAt,
+    })
+  }
+
   for (const item of budgetWarnings.slice(0, 5)) {
     if (!item.pressure) continue
     addAction(actions, {
@@ -178,6 +259,7 @@ export function buildOperationPulse(input: {
       failedRuns: failedRuns.length,
       pendingApprovals: pendingApprovals.length,
       connectorAttention: connectorAttention.length,
+      gatewayAttention: gatewayAttention.length,
       budgetWarnings: budgetWarnings.length,
     },
     actions: sortActions(actions),
@@ -193,5 +275,6 @@ export function getOperationPulse(range: OperationPulseRange): OperationPulse {
     runs: listUnifiedRuns({ limit: 500 }),
     approvals: listPendingApprovals(),
     connectors: Object.values(loadConnectors()),
+    gateways: listOpenClawGatewayProfiles(),
   })
 }

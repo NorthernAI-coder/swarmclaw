@@ -4,6 +4,11 @@ import { credentialQueryKeys } from '@/features/credentials/queries'
 import type {
   GatewayProfile,
   OpenClawDevicePairRequest,
+  OpenClawGatewayFleetTopology,
+  OpenClawGatewayPresenceEntry,
+  OpenClawGatewayRpcError,
+  OpenClawGatewaySession,
+  OpenClawGatewayTopology,
   OpenClawNode,
   OpenClawNodePairRequest,
   OpenClawPairedDevice,
@@ -25,15 +30,6 @@ export interface GatewayRpcResponse<T> {
   ok?: boolean
   result?: T
   error?: string
-}
-
-interface NodeListResult {
-  nodes?: OpenClawNode[]
-}
-
-interface PairingListResult<T> {
-  pending?: T[]
-  paired?: OpenClawPairedDevice[]
 }
 
 interface SaveGatewayProfileInput {
@@ -62,6 +58,10 @@ export interface RefreshGatewayTopologyResult {
   nodePairings: OpenClawNodePairRequest[]
   devicePairings: OpenClawDevicePairRequest[]
   pairedDevices: OpenClawPairedDevice[]
+  sessions: OpenClawGatewaySession[]
+  presence: OpenClawGatewayPresenceEntry[]
+  errors: OpenClawGatewayRpcError[]
+  topology: OpenClawGatewayTopology
 }
 
 async function invalidateGatewayQueries(queryClient: ReturnType<typeof useQueryClient>) {
@@ -71,6 +71,8 @@ async function invalidateGatewayQueries(queryClient: ReturnType<typeof useQueryC
 export const gatewayQueryKeys = {
   all: ['gateways'] as const,
   profiles: () => ['gateways', 'profiles'] as const,
+  fleet: () => ['gateways', 'fleet'] as const,
+  topology: (id: string) => ['gateways', 'topology', id] as const,
 }
 
 export function useGatewayProfilesQuery(options: QueryOptions = {}) {
@@ -126,6 +128,15 @@ export function useGatewayHealthCheckMutation() {
   })
 }
 
+export function useGatewayFleetTopologyQuery(options: QueryOptions = {}) {
+  return useQuery<OpenClawGatewayFleetTopology>({
+    queryKey: gatewayQueryKeys.fleet(),
+    queryFn: () => api<OpenClawGatewayFleetTopology>('GET', '/gateways/fleet'),
+    enabled: options.enabled,
+    staleTime: 30_000,
+  })
+}
+
 export function useVerifyOpenClawDeployMutation() {
   return useMutation<VerifyOpenClawDeployResult, Error, VerifyOpenClawDeployInput>({
     mutationFn: ({ endpoint, token }) =>
@@ -170,48 +181,24 @@ export function useRefreshGatewayTopologyMutation() {
   const queryClient = useQueryClient()
   return useMutation<RefreshGatewayTopologyResult, Error, string>({
     mutationFn: async (profileId) => {
-      const [nodesRes, nodePairRes, devicePairRes] = await Promise.all([
-        api<GatewayRpcResponse<NodeListResult>>('POST', '/openclaw/gateway', {
-          method: 'node.list',
-          params: { profileId },
-        }),
-        api<GatewayRpcResponse<PairingListResult<OpenClawNodePairRequest>>>('POST', '/openclaw/gateway', {
-          method: 'node.pair.list',
-          params: { profileId },
-        }),
-        api<GatewayRpcResponse<PairingListResult<OpenClawDevicePairRequest>>>('POST', '/openclaw/gateway', {
-          method: 'device.pair.list',
-          params: { profileId },
-        }),
-      ])
-
-      if (nodesRes.error) throw new Error(nodesRes.error)
-      if (nodePairRes.error) throw new Error(nodePairRes.error)
-      if (devicePairRes.error) throw new Error(devicePairRes.error)
-
-      const nodes = Array.isArray(nodesRes.result?.nodes) ? nodesRes.result.nodes : []
-      const nodePairings = Array.isArray(nodePairRes.result?.pending) ? nodePairRes.result.pending : []
-      const devicePairings = Array.isArray(devicePairRes.result?.pending) ? devicePairRes.result.pending : []
-      const pairedDevices = Array.isArray(devicePairRes.result?.paired) ? devicePairRes.result.paired : []
-      const stats = {
-        nodeCount: nodes.length,
-        connectedNodeCount: nodes.filter((node) => node.connected).length,
-        pendingNodePairings: nodePairings.length,
-        pairedDeviceCount: pairedDevices.length,
-        pendingDevicePairings: devicePairings.length,
-      }
-
-      void api('PUT', `/gateways/${profileId}`, { stats }).catch(() => {})
+      const topology = await api<OpenClawGatewayTopology>('GET', `/gateways/${profileId}/topology`)
 
       return {
-        nodes,
-        nodePairings,
-        devicePairings,
-        pairedDevices,
+        nodes: topology.nodes,
+        nodePairings: topology.nodePairings,
+        devicePairings: topology.devicePairings,
+        pairedDevices: topology.pairedDevices,
+        sessions: topology.sessions,
+        presence: topology.presence,
+        errors: topology.errors,
+        topology,
       }
     },
-    onSuccess: async () => {
-      await invalidateGatewayQueries(queryClient)
+    onSuccess: async (_result, profileId) => {
+      await Promise.all([
+        invalidateGatewayQueries(queryClient),
+        queryClient.invalidateQueries({ queryKey: gatewayQueryKeys.topology(profileId) }),
+      ])
     },
   })
 }

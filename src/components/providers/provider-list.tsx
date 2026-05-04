@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { OpenClawDeployPanel } from '@/components/openclaw/openclaw-deploy-panel'
 import { useAppStore } from '@/stores/use-app-store'
@@ -14,8 +14,10 @@ import { useCredentialsQuery, useCreateCredentialMutation } from '@/features/cre
 import {
   useCloneGatewayProfileMutation,
   useDeleteGatewayProfileMutation,
+  useGatewayFleetTopologyQuery,
   useGatewayHealthCheckMutation,
   useGatewayProfilesQuery,
+  useRefreshGatewayTopologyMutation,
   useSaveGatewayProfileMutation,
   useVerifyOpenClawDeployMutation,
 } from '@/features/gateways/queries'
@@ -52,6 +54,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const providersQuery = useProvidersQuery()
   const providerConfigsQuery = useProviderConfigsQuery()
   const gatewayProfilesQuery = useGatewayProfilesQuery()
+  const gatewayFleetTopologyQuery = useGatewayFleetTopologyQuery({ enabled: false })
   const externalAgentsQuery = useExternalAgentsQuery()
   const credentialsQuery = useCredentialsQuery()
   const toggleProviderMutation = useToggleProviderMutation()
@@ -60,6 +63,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const saveGatewayMutation = useSaveGatewayProfileMutation()
   const deleteGatewayMutation = useDeleteGatewayProfileMutation()
   const healthCheckGatewayMutation = useGatewayHealthCheckMutation()
+  const refreshGatewayTopologyMutation = useRefreshGatewayTopologyMutation()
   const verifyDeployMutation = useVerifyOpenClawDeployMutation()
   const cloneGatewayMutation = useCloneGatewayProfileMutation()
   const runtimeActionMutation = useExternalAgentRuntimeMutation()
@@ -67,6 +71,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const providers = providersQuery.data ?? []
   const providerConfigs = providerConfigsQuery.data ?? []
   const gatewayProfiles = gatewayProfilesQuery.data ?? []
+  const gatewayFleetTopology = gatewayFleetTopologyQuery.data ?? null
   const externalAgents = externalAgentsQuery.data ?? []
   const credentials = credentialsQuery.data ?? {}
   const savingDeploy = createCredentialMutation.isPending
@@ -101,6 +106,31 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const handleHealthCheckGateway = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     await healthCheckGatewayMutation.mutateAsync(id)
+  }
+
+  const handleRefreshGatewayTopology = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    try {
+      const result = await refreshGatewayTopologyMutation.mutateAsync(id)
+      if (result.errors.length > 0) {
+        toast.warning(`Topology refreshed with ${result.errors.length} warning${result.errors.length === 1 ? '' : 's'}`)
+      } else {
+        toast.success('Gateway topology refreshed')
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh gateway topology')
+    }
+  }
+
+  const handleRefreshFleetTopology = async () => {
+    const result = await gatewayFleetTopologyQuery.refetch()
+    if (result.error) {
+      toast.error(result.error instanceof Error ? result.error.message : 'Failed to refresh fleet topology')
+      return
+    }
+    const errors = result.data?.totals.lastTopologyErrorCount || 0
+    if (errors > 0) toast.warning(`Fleet topology refreshed with ${errors} warning${errors === 1 ? '' : 's'}`)
+    else toast.success('Fleet topology refreshed')
   }
 
   const handleDeployApply = (patch: { endpoint?: string; token?: string; name?: string; notes?: string; deployment?: GatewayProfile['deployment'] | Record<string, unknown> | null }) => {
@@ -246,6 +276,9 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const enabledItems = allItems.filter((item) => item.isEnabled)
   const disabledItems = allItems.filter((item) => !item.isEnabled)
   const gatewayNameById = new Map(gatewayProfiles.map((gateway) => [gateway.id, gateway.name]))
+  const topologyByGatewayId = useMemo(() => new Map(
+    (gatewayFleetTopology?.gateways || []).map((topology) => [topology.profile.id, topology]),
+  ), [gatewayFleetTopology])
   const runtimeHealthByGateway = externalAgents.reduce<Record<string, { total: number; active: number; lastHeartbeatAt: number | null }>>((acc, runtime) => {
     if (!runtime.gatewayProfileId) return acc
     const current = acc[runtime.gatewayProfileId] || { total: 0, active: 0, lastHeartbeatAt: null }
@@ -419,6 +452,14 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => void handleRefreshFleetTopology()}
+              disabled={gatewayFleetTopologyQuery.isFetching}
+              className="px-3 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] transition-all cursor-pointer disabled:opacity-40"
+            >
+              {gatewayFleetTopologyQuery.isFetching ? 'Refreshing…' : 'Refresh Fleet'}
+            </button>
+            <button
+              type="button"
               onClick={() => handleEditGateway(null)}
               className="px-3 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] transition-all cursor-pointer"
             >
@@ -427,6 +468,34 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
           </div>
         )}
       </div>
+      {!inSidebar && gatewayFleetTopology && (
+        <div className="mb-4 rounded-[14px] border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[12px] font-800 text-text">Gateway fleet topology</div>
+              <div className="mt-1 text-[11px] text-text-3/70">
+                {gatewayFleetTopology.totals.connectedGatewayCount}/{gatewayFleetTopology.totals.gatewayCount} gateways connected ·{' '}
+                {gatewayFleetTopology.totals.connectedNodeCount}/{gatewayFleetTopology.totals.nodeCount} nodes connected
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px] text-text-3/70">
+              <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1">
+                {gatewayFleetTopology.totals.sessionCount || 0} sessions
+              </span>
+              <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1">
+                {gatewayFleetTopology.totals.presenceCount || 0} presence
+              </span>
+              <span className={`rounded-full border px-2.5 py-1 ${
+                gatewayFleetTopology.totals.pendingPairingCount > 0
+                  ? 'border-amber-400/20 bg-amber-400/[0.06] text-amber-300'
+                  : 'border-white/[0.06] bg-white/[0.03]'
+              }`}>
+                {gatewayFleetTopology.totals.pendingPairingCount || 0} pending pairings
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       {!inSidebar && (
         <div className="mb-4 rounded-[16px] border border-white/[0.06] bg-white/[0.02] p-4">
           <OpenClawDeployPanel
@@ -462,7 +531,11 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
           (() => {
             const runtimeStats = runtimeHealthByGateway[gateway.id] || { total: 0, active: 0, lastHeartbeatAt: null }
             const deployment = gateway.deployment || null
-            const stats = gateway.stats || null
+            const topology = topologyByGatewayId.get(gateway.id) || null
+            const stats = topology?.stats || gateway.stats || null
+            const topologyErrors = topology?.errors || []
+            const pendingPairings = (stats?.pendingNodePairings || 0) + (stats?.pendingDevicePairings || 0)
+            const topologyErrorCount = topologyErrors.length || stats?.lastTopologyErrorCount || 0
             return (
           <div
             key={gateway.id}
@@ -530,11 +603,28 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
                   </div>
                 </div>
                 <div className="rounded-[10px] border border-white/[0.05] bg-white/[0.02] px-3 py-2">
+                  <div className="uppercase tracking-[0.08em] text-text-3/50">Sessions</div>
+                  <div className="mt-1 text-text-2">
+                    {stats?.sessionCount ?? 0} sessions · {stats?.presenceCount ?? 0} presence
+                  </div>
+                </div>
+                <div className="rounded-[10px] border border-white/[0.05] bg-white/[0.02] px-3 py-2">
                   <div className="uppercase tracking-[0.08em] text-text-3/50">Runtimes</div>
                   <div className="mt-1 text-text-2">
                     {runtimeStats.active}/{runtimeStats.total} active
                   </div>
                 </div>
+              </div>
+            )}
+            {!inSidebar && (pendingPairings > 0 || topologyErrorCount > 0) && (
+              <div className={`mt-3 rounded-[10px] border px-3 py-2 text-[11px] leading-relaxed ${
+                topologyErrorCount > 0
+                  ? 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200'
+                  : 'border-amber-400/20 bg-amber-400/[0.06] text-amber-200'
+              }`}>
+                {topologyErrorCount > 0
+                  ? `Topology warning: ${topologyErrors[0]?.message || stats?.lastTopologyError || `${topologyErrorCount} refresh errors`}`
+                  : `${pendingPairings} pending OpenClaw pairing request${pendingPairings === 1 ? '' : 's'}`}
               </div>
             )}
             {!inSidebar && deployment?.lastVerifiedMessage && (
@@ -546,6 +636,13 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
               <div className="mt-3 flex items-center gap-2">
                 <button onClick={(e) => void handleHealthCheckGateway(e, gateway.id)} className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all">
                   Health
+                </button>
+                <button
+                  onClick={(e) => void handleRefreshGatewayTopology(e, gateway.id)}
+                  disabled={refreshGatewayTopologyMutation.isPending}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all disabled:opacity-40"
+                >
+                  Topology
                 </button>
                 <button onClick={(e) => void handleCloneGateway(e, gateway)} className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all">
                   Clone

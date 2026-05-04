@@ -220,6 +220,8 @@ const COMMAND_GROUPS = {
       update: { description: 'Update a gateway profile', method: 'PUT', path: '/gateways/:id', params: ['id'] },
       delete: { description: 'Delete a gateway profile', method: 'DELETE', path: '/gateways/:id', params: ['id'] },
       health: { description: 'Run a gateway health check', method: 'GET', path: '/gateways/:id/health', params: ['id'] },
+      topology: { description: 'Refresh and return one gateway topology snapshot', method: 'GET', path: '/gateways/:id/topology', params: ['id'] },
+      fleet: { description: 'Refresh and return fleet-wide gateway topology', method: 'GET', path: '/gateways/fleet' },
     },
   },
   logs: {

@@ -670,6 +670,11 @@ export interface OpenClawGatewayStats {
   pairedDeviceCount?: number
   pendingDevicePairings?: number
   externalRuntimeCount?: number
+  sessionCount?: number
+  presenceCount?: number
+  lastTopologyCheckedAt?: number
+  lastTopologyErrorCount?: number
+  lastTopologyError?: string | null
 }
 
 export interface OpenClawDeploymentConfig {
@@ -771,6 +776,59 @@ export interface OpenClawDevicePairRequest {
 export interface OpenClawPairingSnapshot {
   pending?: OpenClawDevicePairRequest[]
   paired?: OpenClawPairedDevice[]
+}
+
+export interface OpenClawGatewayRpcError {
+  method: string
+  message: string
+}
+
+export interface OpenClawGatewaySession {
+  id: string
+  key?: string | null
+  title?: string | null
+  channel?: string | null
+  sender?: string | null
+  updatedAt?: number | null
+  status?: string | null
+}
+
+export interface OpenClawGatewayPresenceEntry {
+  id: string
+  label?: string | null
+  mode?: string | null
+  deviceId?: string | null
+  host?: string | null
+  status?: string | null
+  updatedAt?: number | null
+}
+
+export interface OpenClawGatewayTopologyStats extends OpenClawGatewayStats {
+  pendingPairingCount: number
+  hasErrors: boolean
+}
+
+export interface OpenClawGatewayTopology {
+  profile: GatewayProfile
+  connected: boolean
+  refreshedAt: number
+  stats: OpenClawGatewayTopologyStats
+  nodes: OpenClawNode[]
+  nodePairings: OpenClawNodePairRequest[]
+  devicePairings: OpenClawDevicePairRequest[]
+  pairedDevices: OpenClawPairedDevice[]
+  sessions: OpenClawGatewaySession[]
+  presence: OpenClawGatewayPresenceEntry[]
+  errors: OpenClawGatewayRpcError[]
+}
+
+export interface OpenClawGatewayFleetTopology {
+  generatedAt: number
+  gateways: OpenClawGatewayTopology[]
+  totals: OpenClawGatewayTopologyStats & {
+    gatewayCount: number
+    connectedGatewayCount: number
+  }
 }
 
 // --- ClawHub ---

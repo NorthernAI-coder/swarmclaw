@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import { buildOperationPulse, normalizeOperationPulseRange } from './operation-pulse'
-import type { ApprovalRequest, Connector, Mission, SessionRunRecord } from '@/types'
+import type { ApprovalRequest, Connector, GatewayProfile, Mission, SessionRunRecord } from '@/types'
 
 const now = 10_000_000
 
@@ -79,6 +79,30 @@ function connector(overrides: Partial<Connector>): Connector {
   }
 }
 
+function gateway(overrides: Partial<GatewayProfile>): GatewayProfile {
+  return {
+    id: overrides.id || 'gateway_1',
+    name: overrides.name || 'OpenClaw Gateway',
+    provider: 'openclaw',
+    endpoint: overrides.endpoint || 'http://127.0.0.1:18789/v1',
+    wsUrl: overrides.wsUrl ?? null,
+    credentialId: overrides.credentialId ?? null,
+    status: overrides.status || 'healthy',
+    notes: overrides.notes ?? null,
+    tags: overrides.tags || [],
+    lastError: overrides.lastError ?? null,
+    lastCheckedAt: overrides.lastCheckedAt ?? null,
+    lastModelCount: overrides.lastModelCount ?? null,
+    discoveredHost: overrides.discoveredHost ?? null,
+    discoveredPort: overrides.discoveredPort ?? null,
+    deployment: overrides.deployment ?? null,
+    stats: overrides.stats ?? null,
+    isDefault: overrides.isDefault ?? false,
+    createdAt: overrides.createdAt ?? now - 4000,
+    updatedAt: overrides.updatedAt ?? now - 2000,
+  }
+}
+
 describe('operation pulse', () => {
   it('normalizes unsupported ranges to the 24-hour default', () => {
     assert.equal(normalizeOperationPulseRange('7d'), '7d')
@@ -94,6 +118,7 @@ describe('operation pulse', () => {
       runs: [run({ id: 'failed', status: 'failed', error: 'bad', endedAt: now - 100 }), run({ id: 'running', status: 'running' })],
       approvals: [approval({ category: 'budget_change' })],
       connectors: [connector({ lastError: 'token rejected' })],
+      gateways: [],
     })
 
     assert.equal(pulse.kpis.activeMissions, 1)
@@ -101,8 +126,39 @@ describe('operation pulse', () => {
     assert.equal(pulse.kpis.failedRuns, 1)
     assert.equal(pulse.kpis.pendingApprovals, 1)
     assert.equal(pulse.kpis.connectorAttention, 1)
+    assert.equal(pulse.kpis.gatewayAttention, 0)
     assert.equal(pulse.kpis.budgetWarnings, 1)
     assert.deepEqual(pulse.actions.slice(0, 3).map((action) => action.severity), ['high', 'high', 'high'])
     assert.ok(pulse.actions.some((action) => action.kind === 'budget' && action.summary.includes('90%')))
+  })
+
+  it('surfaces OpenClaw gateway topology attention', () => {
+    const pulse = buildOperationPulse({
+      range: '24h',
+      now,
+      missions: [],
+      runs: [],
+      approvals: [],
+      connectors: [],
+      gateways: [
+        gateway({
+          status: 'healthy',
+          stats: {
+            nodeCount: 2,
+            connectedNodeCount: 1,
+            pendingNodePairings: 1,
+            pendingDevicePairings: 1,
+            lastTopologyCheckedAt: now - 1000,
+          },
+        }),
+      ],
+    })
+
+    assert.equal(pulse.kpis.gatewayAttention, 1)
+    assert.equal(pulse.actions.length, 1)
+    assert.equal(pulse.actions[0]?.kind, 'gateway')
+    assert.equal(pulse.actions[0]?.severity, 'medium')
+    assert.ok((pulse.actions[0]?.summary || '').includes('pending OpenClaw pairing'))
+    assert.equal(pulse.actions[0]?.href, '/providers')
   })
 })

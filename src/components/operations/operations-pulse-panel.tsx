@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle2, Clock, PlugZap, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, PlugZap, RadioTower, RefreshCw } from 'lucide-react'
 import { api } from '@/lib/app/api-client'
 import { cn } from '@/lib/utils'
 import type { OperationPulse, OperationPulseAction, OperationPulseRange, OperationPulseSeverity } from '@/types'
@@ -39,6 +39,7 @@ function Kpi({ label, value, danger = false }: { label: string; value: number; d
 function actionIcon(action: OperationPulseAction) {
   if (action.severity === 'high') return <AlertTriangle size={15} />
   if (action.kind === 'connector') return <PlugZap size={15} />
+  if (action.kind === 'gateway') return <RadioTower size={15} />
   if (action.kind === 'mission') return <Clock size={15} />
   return <CheckCircle2 size={15} />
 }
@@ -82,6 +83,7 @@ export function OperationsPulsePanel({
     return pulse.kpis.failedRuns === 0
       && pulse.kpis.pendingApprovals === 0
       && pulse.kpis.connectorAttention === 0
+      && pulse.kpis.gatewayAttention === 0
       && pulse.kpis.budgetWarnings === 0
   }, [pulse])
 
@@ -92,7 +94,7 @@ export function OperationsPulsePanel({
           <div className="text-[10px] font-700 uppercase tracking-[0.16em] text-accent-bright/70">Operations Pulse</div>
           <h2 className="mt-1 font-display text-[16px] font-700 tracking-normal text-text">What needs operator attention next</h2>
           <p className="mt-1 max-w-[680px] text-[12px] leading-relaxed text-text-3/68">
-            Missions, runs, approvals, connector readiness, and budget pressure rolled into one triage queue.
+            Missions, runs, approvals, connector readiness, OpenClaw gateways, and budget pressure rolled into one triage queue.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -130,12 +132,13 @@ export function OperationsPulsePanel({
         </div>
       ) : (
         <>
-          <div className={cn('mt-4 grid gap-2', compact ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6')}>
+          <div className={cn('mt-4 grid gap-2', compact ? 'grid-cols-2 md:grid-cols-4 xl:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-7')}>
             <Kpi label="Missions" value={pulse.kpis.activeMissions} />
             <Kpi label="Running" value={pulse.kpis.runningRuns} />
             <Kpi label="Failed" value={pulse.kpis.failedRuns} danger />
             <Kpi label="Approvals" value={pulse.kpis.pendingApprovals} />
             <Kpi label="Connectors" value={pulse.kpis.connectorAttention} danger />
+            <Kpi label="Gateways" value={pulse.kpis.gatewayAttention} danger />
             <Kpi label="Budgets" value={pulse.kpis.budgetWarnings} />
           </div>
 

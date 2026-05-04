@@ -68,6 +68,11 @@ function normalizeStats(value: unknown): OpenClawGatewayStats | null {
     pairedDeviceCount: normalizeNullableNumber(stats.pairedDeviceCount) ?? undefined,
     pendingDevicePairings: normalizeNullableNumber(stats.pendingDevicePairings) ?? undefined,
     externalRuntimeCount: normalizeNullableNumber(stats.externalRuntimeCount) ?? undefined,
+    sessionCount: normalizeNullableNumber(stats.sessionCount) ?? undefined,
+    presenceCount: normalizeNullableNumber(stats.presenceCount) ?? undefined,
+    lastTopologyCheckedAt: normalizeNullableNumber(stats.lastTopologyCheckedAt) ?? undefined,
+    lastTopologyErrorCount: normalizeNullableNumber(stats.lastTopologyErrorCount) ?? undefined,
+    lastTopologyError: normalizeText(stats.lastTopologyError),
   }
 }
 
