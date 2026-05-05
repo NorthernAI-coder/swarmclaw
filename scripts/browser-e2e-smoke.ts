@@ -296,6 +296,15 @@ async function waitForPageText(page: Page, url: string, options: { anyText: stri
   )
 }
 
+async function smokeStep(label: string, fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn()
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`${label}: ${message}`)
+  }
+}
+
 async function runBrowserSmoke(baseUrl: string): Promise<void> {
   await expectHealth(baseUrl)
   await expectAgentCard(baseUrl)
@@ -309,19 +318,23 @@ async function runBrowserSmoke(baseUrl: string): Promise<void> {
     const page = await context.newPage()
     page.on('pageerror', (err) => pageErrors.push(err.message))
 
-    await waitForPageText(page, '/home', {
+    await smokeStep('home page loads', () => waitForPageText(page, '/home', {
       anyText: ['Launchpad', 'SwarmClaw', 'Pick a path'],
-    })
-    await waitForPageText(page, '/quality', {
+    }))
+    await smokeStep('quality overview loads', () => waitForPageText(page, '/quality', {
       anyText: ['Quality', 'Operator Quality Center', 'Eval Lab', 'Approval Desk'],
-    })
-    await waitForPageText(page, '/quality?tab=evals', {
+    }))
+    await smokeStep('quality release readiness panel renders', () => page.waitForFunction(() => {
+      const text = (document.body?.innerText || '').toLowerCase()
+      return text.includes('release readiness') && text.includes('ship gate report')
+    }, { timeout: PAGE_TIMEOUT_MS }))
+    await smokeStep('eval lab tab loads', () => waitForPageText(page, '/quality?tab=evals', {
       anyText: ['Eval Lab'],
-    })
-    await page.waitForFunction(() => {
+    }))
+    await smokeStep('eval readiness panels render', () => page.waitForFunction(() => {
       const text = document.body?.innerText || ''
       return text.includes('Validation environment') && text.includes('Regression gate')
-    }, { timeout: PAGE_TIMEOUT_MS })
+    }, { timeout: PAGE_TIMEOUT_MS }))
 
     const taskRes = await fetchWithTimeout(new URL('/api/tasks', baseUrl).toString(), {
       method: 'POST',
@@ -342,13 +355,13 @@ async function runBrowserSmoke(baseUrl: string): Promise<void> {
       throw new Error(`Could not create task workspace smoke record: ${taskRes.status} ${await taskRes.text().catch(() => '')}`)
     }
 
-    await waitForPageText(page, '/tasks?taskView=all', {
+    await smokeStep('task board shows created workspace task', () => waitForPageText(page, '/tasks?taskView=all', {
       anyText: ['E2E task workspace'],
-    })
-    await page.waitForFunction(() => {
+    }))
+    await smokeStep('task workspace metadata renders', () => page.waitForFunction(() => {
       const text = document.body?.innerText || ''
       return text.includes('E2E task workspace') && text.includes('workspace') && text.includes('ready')
-    }, { timeout: PAGE_TIMEOUT_MS })
+    }, { timeout: PAGE_TIMEOUT_MS }))
 
     if (pageErrors.length > 0) {
       throw new Error(`Browser page errors:\n${pageErrors.join('\n')}`)

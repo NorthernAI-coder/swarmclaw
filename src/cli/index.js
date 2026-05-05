@@ -210,6 +210,7 @@ const COMMAND_GROUPS = [
     description: 'Operator triage and readiness summaries',
     commands: [
       cmd('pulse', 'GET', '/operations/pulse', 'Get Operations Pulse summary (use --query range=24h or --query range=7d)'),
+      cmd('readiness', 'GET', '/quality/release-readiness', 'Get release readiness report (use --query agentId=... and --query suite=core for eval gate coverage)'),
     ],
   },
   {

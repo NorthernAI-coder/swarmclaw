@@ -15,6 +15,7 @@ import {
   summarizeEvalRuns,
   summarizeRunHealth,
 } from '@/lib/quality/quality-summary'
+import type { ReleaseReadinessReport, ReleaseReadinessStatus } from '@/lib/quality/release-readiness'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/use-app-store'
 import type { EvalEnvironmentPlan, EvalGateResult, EvalRun, EvalSuiteResult } from '@/lib/server/eval/types'
@@ -127,6 +128,130 @@ function gateCheckClass(status: EvalGateResult['status']): string {
   if (status === 'fail') return 'border-rose-500/20 bg-rose-500/[0.05] text-rose-200'
   if (status === 'warn') return 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200'
   return 'border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-200'
+}
+
+function readinessStatusClass(status: ReleaseReadinessStatus): string {
+  if (status === 'ready') return 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+  if (status === 'warning') return 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+  return 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+}
+
+function readinessScoreTone(status: ReleaseReadinessStatus): string {
+  if (status === 'ready') return 'text-emerald-300'
+  if (status === 'warning') return 'text-amber-300'
+  return 'text-rose-300'
+}
+
+function ReleaseReadinessPanel({
+  report,
+  loading,
+  onRefresh,
+  onOpenHref,
+}: {
+  report: ReleaseReadinessReport | null
+  loading: boolean
+  onRefresh: () => void
+  onOpenHref: (href: string) => void
+}) {
+  return (
+    <section className="rounded-[16px] border border-white/[0.06] bg-white/[0.025] p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="text-[11px] font-700 uppercase tracking-[0.12em] text-accent-bright/70">Release Readiness</div>
+          <h2 className="mt-1 font-display text-[17px] font-700 text-text">Ship gate report</h2>
+          <p className="mt-1 max-w-[680px] text-[12px] leading-relaxed text-text-3/65">
+            Combines eval regression gates, operations pulse blockers, pending approvals, active runs, budgets, connectors, and gateway readiness.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="shrink-0 rounded-[10px] border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[12px] font-800 text-text-2 transition-colors hover:bg-white/[0.08] disabled:opacity-40"
+        >
+          {loading ? 'Checking' : 'Refresh gate'}
+        </button>
+      </div>
+
+      {!report ? (
+        <div className="mt-4 rounded-[12px] border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-5 text-[12px] text-text-3/65">
+          {loading ? 'Building release readiness report...' : 'No release readiness report is available yet.'}
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[260px_1fr]">
+          <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.025] p-4">
+            <span className={cn('inline-flex rounded-full border px-2.5 py-1 text-[10px] font-800 uppercase tracking-[0.1em]', readinessStatusClass(report.status))}>
+              {report.status}
+            </span>
+            <div className={cn('mt-4 font-display text-[42px] font-700 tracking-[-0.04em]', readinessScoreTone(report.status))}>{report.score}</div>
+            <div className="mt-1 text-[12px] text-text-3/65">readiness score</div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-[10px] bg-white/[0.035] px-3 py-2">
+                <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/50">Blockers</div>
+                <div className="mt-1 text-[18px] font-800 text-text">{report.blockerCount}</div>
+              </div>
+              <div className="rounded-[10px] bg-white/[0.035] px-3 py-2">
+                <div className="text-[10px] font-700 uppercase tracking-[0.1em] text-text-3/50">Warnings</div>
+                <div className="mt-1 text-[18px] font-800 text-text">{report.warningCount}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="text-[12px] font-800 text-text">Checks</div>
+              <div className="mt-3 flex flex-col gap-2">
+                {report.checks.slice(0, 6).map((check) => (
+                  <button
+                    key={check.code}
+                    type="button"
+                    onClick={() => check.href && onOpenHref(check.href)}
+                    className={cn(
+                      'rounded-[10px] border px-3 py-2 text-left transition-colors',
+                      readinessStatusClass(check.status),
+                      check.href ? 'hover:bg-white/[0.08]' : '',
+                    )}
+                  >
+                    <div className="text-[11px] font-800 uppercase tracking-[0.08em]">{check.status}</div>
+                    <div className="mt-1 text-[12px] font-700 text-text">{check.title}</div>
+                    <div className="mt-0.5 text-[11px] leading-relaxed text-text-3/70">{check.summary}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="text-[12px] font-800 text-text">Next actions</div>
+              <div className="mt-3 flex flex-col gap-2">
+                {report.nextActions.length === 0 ? (
+                  <div className="rounded-[10px] border border-white/[0.06] bg-white/[0.025] px-3 py-4 text-[12px] text-text-3/65">
+                    No triage actions are open in the selected window.
+                  </div>
+                ) : (
+                  report.nextActions.slice(0, 5).map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => onOpenHref(action.href)}
+                      className="rounded-[10px] border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-left transition-colors hover:bg-white/[0.06]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[12px] font-800 text-text">{action.title}</div>
+                        <span className={cn('rounded-full border px-2 py-0.5 text-[9px] font-800 uppercase tracking-[0.08em]', action.severity === 'high' ? 'border-rose-500/25 text-rose-200' : action.severity === 'medium' ? 'border-amber-500/25 text-amber-200' : 'border-emerald-500/25 text-emerald-200')}>
+                          {action.severity}
+                        </span>
+                      </div>
+                      <div className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-3/65">{action.summary}</div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
 }
 
 function EvalEnvironmentPanel({ plan, loading, onRefresh }: {
@@ -344,6 +469,8 @@ export function QualityWorkspace() {
   const [evalGateScope, setEvalGateScope] = useState<'scenario' | 'suite'>('scenario')
   const [evalGateLoading, setEvalGateLoading] = useState(false)
   const [evalBaselineBusy, setEvalBaselineBusy] = useState(false)
+  const [releaseReadiness, setReleaseReadiness] = useState<ReleaseReadinessReport | null>(null)
+  const [releaseReadinessLoading, setReleaseReadinessLoading] = useState(false)
   const [approvalBusy, setApprovalBusy] = useState<string | null>(null)
 
   useEffect(() => {
@@ -432,6 +559,25 @@ export function QualityWorkspace() {
     }
   }, [evalGateScope, selectedAgentId, selectedScenarioId, selectedSuite])
 
+  const loadReleaseReadiness = useCallback(async () => {
+    const params = new URLSearchParams({ range: '7d' })
+    if (selectedAgentId) {
+      params.set('agentId', selectedAgentId)
+      if (evalGateScope === 'scenario' && selectedScenarioId) params.set('scenarioId', selectedScenarioId)
+      if (evalGateScope === 'suite') params.set('suite', selectedSuite)
+    }
+    setReleaseReadinessLoading(true)
+    try {
+      const report = await api<ReleaseReadinessReport>('GET', `/quality/release-readiness?${params.toString()}`)
+      setReleaseReadiness(report)
+    } catch (err) {
+      setReleaseReadiness(null)
+      toast.error(err instanceof Error ? err.message : 'Unable to check release readiness')
+    } finally {
+      setReleaseReadinessLoading(false)
+    }
+  }, [evalGateScope, selectedAgentId, selectedScenarioId, selectedSuite])
+
   useEffect(() => {
     void loadQualityData()
   }, [loadQualityData])
@@ -453,6 +599,10 @@ export function QualityWorkspace() {
   useEffect(() => {
     void loadEvalGate()
   }, [loadEvalGate])
+
+  useEffect(() => {
+    void loadReleaseReadiness()
+  }, [loadReleaseReadiness])
 
   useEffect(() => {
     if (!suites.some((suite) => suite.name === selectedSuite) && suites[0]) {
@@ -495,12 +645,13 @@ export function QualityWorkspace() {
       await loadQualityData({ silent: true })
       await loadEvalEnvironmentPlan()
       await loadEvalGate()
+      await loadReleaseReadiness()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Eval scenario failed')
     } finally {
       setEvalBusy(null)
     }
-  }, [evalEnvironmentPlan, loadEvalEnvironmentPlan, loadEvalGate, loadQualityData, selectedAgentId, selectedScenarioId])
+  }, [evalEnvironmentPlan, loadEvalEnvironmentPlan, loadEvalGate, loadQualityData, loadReleaseReadiness, selectedAgentId, selectedScenarioId])
 
   const runSuite = useCallback(async (suiteName: string) => {
     if (!selectedAgentId) {
@@ -524,12 +675,13 @@ export function QualityWorkspace() {
       await loadQualityData({ silent: true })
       await loadEvalEnvironmentPlan()
       await loadEvalGate()
+      await loadReleaseReadiness()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Eval suite failed')
     } finally {
       setEvalBusy(null)
     }
-  }, [evalEnvironmentPlan, loadEvalEnvironmentPlan, loadEvalGate, loadQualityData, selectedAgentId])
+  }, [evalEnvironmentPlan, loadEvalEnvironmentPlan, loadEvalGate, loadQualityData, loadReleaseReadiness, selectedAgentId])
 
   const setEvalBaseline = useCallback(async () => {
     if (!selectedAgentId) {
@@ -547,13 +699,14 @@ export function QualityWorkspace() {
         : { agentId: selectedAgentId, suite: selectedSuite, minPercent: evalGate?.minPercent ?? 80, maxRegressionPoints: evalGate?.maxRegressionPoints ?? 5 }
       const result = await api<{ gate: EvalGateResult }>('POST', '/eval/baselines', body)
       setEvalGate(result.gate)
+      await loadReleaseReadiness()
       toast.success('Eval baseline saved')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Unable to save eval baseline')
     } finally {
       setEvalBaselineBusy(false)
     }
-  }, [evalGate, evalGateScope, selectedAgentId, selectedScenarioId, selectedSuite])
+  }, [evalGate, evalGateScope, loadReleaseReadiness, selectedAgentId, selectedScenarioId, selectedSuite])
 
   const actOnApproval = useCallback(async (approval: ApprovalRequest, approved: boolean) => {
     setApprovalBusy(approval.id)
@@ -561,12 +714,13 @@ export function QualityWorkspace() {
       await api('POST', '/approvals', { id: approval.id, approved })
       toast.success(approved ? 'Approval granted' : 'Approval denied')
       await loadQualityData({ silent: true })
+      await loadReleaseReadiness()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Unable to update approval')
     } finally {
       setApprovalBusy(null)
     }
-  }, [loadQualityData])
+  }, [loadQualityData, loadReleaseReadiness])
 
   if (loading) {
     return (
@@ -630,6 +784,12 @@ export function QualityWorkspace() {
           {activeTab === 'overview' && (
             <div className="flex flex-col gap-6">
               <OperationsPulsePanel defaultRange="7d" compact />
+              <ReleaseReadinessPanel
+                report={releaseReadiness}
+                loading={releaseReadinessLoading}
+                onRefresh={() => void loadReleaseReadiness()}
+                onOpenHref={(href) => router.push(href)}
+              />
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <StatTile

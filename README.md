@@ -399,6 +399,15 @@ Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
 
+### v1.9.8 Highlights
+
+Bundled release-readiness release: a single operator report that combines eval gates, operations blockers, approvals, and runtime readiness.
+
+- **Release readiness report.** `/api/quality/release-readiness` returns a scored ready/warning/blocked report built from eval regression gates and Operations Pulse evidence.
+- **Quality Center ship gate.** The Quality overview now shows readiness score, blockers, warnings, checks, and next actions before operators cut a release.
+- **CLI readiness checks.** `swarmclaw operations readiness` exposes the same report for scripts and CI.
+- **Browser coverage.** The e2e smoke now verifies the release-readiness panel on `/quality`.
+
 ### v1.9.7 Highlights
 
 Bundled eval-gate release: approved baselines, regression checks, and Quality Center release gates for repeatable eval evidence.
