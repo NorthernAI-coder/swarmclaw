@@ -48,13 +48,14 @@ mac:
         - arm64
         - x64
   icon: resources/icon.icns
-  hardenedRuntime: false
+  hardenedRuntime: true
   gatekeeperAssess: false
-  identity: '-'
-  # Ad-hoc signed, not notarized. macOS quarantine may still flag the dmg as
-  # "damaged" on first download; users can clear it with:
+  # Developer ID signing is used when CSC_LINK/CSC_KEY_PASSWORD are available.
+  # electron-builder then notarizes when APPLE_* notarization credentials are
+  # present. Without those secrets, the afterPack hook leaves an ad-hoc
+  # signature so local smoke builds still produce launchable artifacts.
+  # Ad-hoc macOS builds can still show "damaged" after Safari quarantine:
   #   xattr -dr com.apple.quarantine /Applications/SwarmClaw.app
-  # Proper Developer ID signing + notarization is tracked as a future item.
 
 win:
   target:

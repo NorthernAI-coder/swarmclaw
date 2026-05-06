@@ -13,6 +13,7 @@ import {
 import { fetchProviders } from '@/lib/chat/chats'
 import type {
   ProviderConfig,
+  ProviderCheckResult,
   ProviderInfo,
   ProviderModelDiscoveryResult,
 } from '@/types'
@@ -129,7 +130,7 @@ export function useResetProviderModelsMutation() {
 export function useCheckProviderConnectionMutation() {
   return useMutation({
     mutationFn: ({ provider, credentialId, endpoint, model }: CheckProviderConnectionInput) =>
-      api<{ ok: boolean; message: string }>('POST', '/setup/check-provider', {
+      api<ProviderCheckResult>('POST', '/setup/check-provider', {
         provider,
         credentialId,
         endpoint,

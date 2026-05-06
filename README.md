@@ -81,8 +81,10 @@ Extension tutorial: https://swarmclaw.ai/docs/extension-tutorial
 Download the one-click installer from [swarmclaw.ai/downloads](https://swarmclaw.ai/downloads).
 Available for macOS (Apple Silicon & Intel), Windows, and Linux (AppImage + .deb).
 
-Current builds are ad-hoc signed but not notarized, so on first launch:
-- **macOS:** right-click the app in Finder → **Open** → **Open** to bypass Gatekeeper. If macOS instead reports *"SwarmClaw is damaged and can't be opened"* (common on Apple Silicon when the dmg was quarantined by Safari), strip the quarantine attribute and relaunch:
+The release workflow supports Developer ID signing and notarization when Apple
+credentials are configured. If a macOS build is still ad-hoc signed, first
+launch may need one manual approval:
+- **macOS:** right-click the app in Finder → **Open** → **Open** to bypass Gatekeeper. If macOS instead reports *"SwarmClaw is damaged and can't be opened"* (common when the dmg was quarantined by Safari), strip the quarantine attribute and relaunch:
   ```bash
   xattr -dr com.apple.quarantine /Applications/SwarmClaw.app
   ```
@@ -406,6 +408,15 @@ If you need a trace-specific endpoint, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 
 Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
+
+### v1.9.21 Highlights
+
+Provider diagnostics release: connection checks now return a structured step timeline across setup, provider settings, and agent editing.
+
+- **Connection timelines.** Provider checks show endpoint resolution, model discovery, fallback selection, and chat/gateway verification steps.
+- **Safer error details.** Token-like values are redacted before check messages or diagnostics are returned to the UI.
+- **Local runtime debugging.** LM Studio, Ollama, custom OpenAI-compatible endpoints, cloud providers, OpenClaw gateways, and CLI providers all report concise pass/fail diagnostics.
+- **macOS signing path.** Desktop releases now forward Developer ID and Apple notarization credentials when configured, while ad-hoc fallback builds keep the quarantine workaround documented.
 
 ### v1.9.20 Highlights
 

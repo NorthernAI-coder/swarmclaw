@@ -105,11 +105,52 @@ jobs:
           "HOMEDRIVE=D:" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "HOMEPATH=\\swarmclaw-home" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Check macOS signing inputs
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          has_certificate=false
+          has_apple_id_notary=false
+          has_api_key_notary=false
+
+          if [ -n "${CSC_LINK:-}" ] && [ -n "${CSC_KEY_PASSWORD:-}" ]; then
+            has_certificate=true
+          fi
+          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+            has_apple_id_notary=true
+          fi
+          if [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
+            has_api_key_notary=true
+          fi
+
+          if [ "$has_certificate" = true ] && { [ "$has_apple_id_notary" = true ] || [ "$has_api_key_notary" = true ]; }; then
+            echo "Developer ID signing and notarization inputs are configured."
+          else
+            echo "Developer ID signing and notarization inputs are incomplete; macOS artifacts will remain ad-hoc signed."
+          fi
+
       - name: Build desktop app
         run: npm run ${{ matrix.script }} -- --publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           NEXT_TELEMETRY_DISABLED: '1'
 
       - name: Upload build logs on failure

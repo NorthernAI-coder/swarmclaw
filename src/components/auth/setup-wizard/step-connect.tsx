@@ -5,7 +5,8 @@ import { api } from '@/lib/app/api-client'
 import { dedup, errorMessage } from '@/lib/shared-utils'
 import { getDefaultModelForProvider } from '@/lib/setup-defaults'
 import { OpenClawDeployPanel } from '@/components/openclaw/openclaw-deploy-panel'
-import type { Credential, Credentials, GatewayProfile, ProviderId, ProviderConfig } from '@/types'
+import { ProviderDiagnosticsList } from '@/components/providers/provider-diagnostics-list'
+import type { Credential, Credentials, GatewayProfile, ProviderDiagnosticStep, ProviderId, ProviderConfig } from '@/types'
 import type { StepConnectProps, CheckState, ProviderCheckResponse, ConfiguredProvider } from './types'
 import {
   formatEndpointHost,
@@ -34,6 +35,7 @@ export function StepConnect({
   const [checkState, setCheckState] = useState<CheckState>(editingProvider?.verified ? 'ok' : 'idle')
   const [checkMessage, setCheckMessage] = useState('')
   const [checkErrorCode, setCheckErrorCode] = useState<string | null>(null)
+  const [checkDiagnostics, setCheckDiagnostics] = useState<ProviderDiagnosticStep[]>([])
   const [openclawDeviceId, setOpenclawDeviceId] = useState<string | null>(null)
   const [providerSuggestedModel, setProviderSuggestedModel] = useState(
     editingProvider?.defaultModel || (provider === 'custom' ? '' : getDefaultModelForProvider(provider)),
@@ -111,6 +113,7 @@ export function StepConnect({
     setCheckState('idle')
     setCheckMessage('')
     setCheckErrorCode(null)
+    setCheckDiagnostics([])
     setError('')
   }
 
@@ -118,12 +121,14 @@ export function StepConnect({
     if (requiresKey && !hasKeyOrCredential) {
       setCheckState('error')
       setCheckMessage('Please paste your API key or select a saved key first.')
+      setCheckDiagnostics([])
       return false
     }
 
     setCheckState('checking')
     setCheckMessage('')
     setCheckErrorCode(null)
+    setCheckDiagnostics([])
     setError('')
     try {
       const result = await api<ProviderCheckResponse>('POST', '/setup/check-provider', {
@@ -140,6 +145,7 @@ export function StepConnect({
         setProviderSuggestedModel(result.recommendedModel)
       }
       setCheckErrorCode(result.errorCode || null)
+      setCheckDiagnostics(result.diagnostics ?? [])
       setOpenclawDeviceId(result.deviceId || null)
       setCheckState(result.ok ? 'ok' : 'error')
       setCheckMessage(result.message || (result.ok ? 'Connected successfully.' : 'Connection failed.'))
@@ -148,6 +154,7 @@ export function StepConnect({
       setCheckState('error')
       setCheckMessage(errorMessage(err))
       setCheckErrorCode(null)
+      setCheckDiagnostics([])
       return false
     }
   }
@@ -280,7 +287,7 @@ export function StepConnect({
             <input
               type="text"
               value={endpoint}
-              onChange={(e) => { setEndpoint(e.target.value); setCheckState('idle'); setCheckMessage('') }}
+              onChange={(e) => { setEndpoint(e.target.value); setCheckState('idle'); setCheckMessage(''); setCheckDiagnostics([]) }}
               placeholder={selectedProvider.defaultEndpoint || ''}
               className="w-full px-4 py-3 rounded-[12px] border border-white/[0.08] bg-surface
                 text-text text-[14px] font-mono outline-none transition-all duration-200
@@ -295,6 +302,7 @@ export function StepConnect({
                     setEndpoint(isCloud ? (selectedProvider.defaultEndpoint || '') : selectedProvider.cloudEndpoint!)
                     setCheckState('idle')
                     setCheckMessage('')
+                    setCheckDiagnostics([])
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] border text-[12px] font-500 cursor-pointer transition-all duration-200 bg-transparent
                     border-white/[0.08] text-text-2 hover:bg-white/[0.04]"
@@ -440,6 +448,7 @@ export function StepConnect({
                       setApiKey('')
                       setCheckState('idle')
                       setCheckMessage('')
+                      setCheckDiagnostics([])
                     }
                   }}
                   className="w-full px-4 py-3 rounded-[12px] border border-white/[0.08] bg-surface
@@ -466,7 +475,7 @@ export function StepConnect({
                 <input
                   type="password"
                   value={apiKey}
-                  onChange={(e) => { setApiKey(e.target.value); setCredentialId(null); setCheckState('idle'); setCheckMessage(''); setError('') }}
+                  onChange={(e) => { setApiKey(e.target.value); setCredentialId(null); setCheckState('idle'); setCheckMessage(''); setCheckDiagnostics([]); setError('') }}
                   placeholder={selectedProvider.keyPlaceholder || (provider === 'openclaw' ? 'Paste OpenClaw bearer token' : 'sk-...')}
                   className="w-full px-4 py-3 rounded-[12px] border border-white/[0.08] bg-surface
                     text-text text-[14px] font-mono outline-none transition-all duration-200
@@ -530,6 +539,7 @@ export function StepConnect({
               Device paired as <code className="text-text-2">{openclawDeviceId.slice(0, 12)}...</code>.
             </p>
           )}
+          <ProviderDiagnosticsList diagnostics={checkDiagnostics} />
         </div>
       )}
 

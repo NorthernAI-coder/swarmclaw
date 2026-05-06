@@ -1,17 +1,10 @@
-import type { GatewayProfile, ProviderId } from '@/types'
+import type { GatewayProfile, ProviderCheckResult, ProviderId } from '@/types'
 import type { SetupProvider } from '@/lib/setup-defaults'
 
 export type SetupStep = 'profile' | 'path' | 'providers' | 'connect' | 'agents' | 'next' | 'done'
 export type CheckState = 'idle' | 'checking' | 'ok' | 'error'
 
-export interface ProviderCheckResponse {
-  ok: boolean
-  message: string
-  normalizedEndpoint?: string
-  recommendedModel?: string
-  errorCode?: string
-  deviceId?: string
-}
+export type ProviderCheckResponse = ProviderCheckResult
 
 export interface SetupDoctorCheck {
   id: string

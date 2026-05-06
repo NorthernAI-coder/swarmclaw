@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { normalizeOllamaSetupEndpoint, normalizeOpenClawUrl, parseErrorMessage } from './helpers'
+import { POST } from './route'
 
 test('normalizeOllamaSetupEndpoint strips local /v1 suffixes but preserves cloud endpoints', () => {
   assert.equal(
@@ -116,4 +117,47 @@ test('normalizeOpenClawUrl handles bare IP:port', () => {
   const { httpUrl, wsUrl } = normalizeOpenClawUrl('10.0.0.5:18789')
   assert.equal(httpUrl, 'http://10.0.0.5:18789')
   assert.equal(wsUrl, 'ws://10.0.0.5:18789')
+})
+
+test('POST returns provider diagnostics with normalized LM Studio targets and redacted errors', async () => {
+  const originalFetch = globalThis.fetch
+  const calls: string[] = []
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    calls.push(url)
+    if (url.endsWith('/models')) {
+      return new Response(JSON.stringify({ data: [{ id: 'google/gemma-4-e4b' }] }), { status: 200 })
+    }
+    return new Response(
+      JSON.stringify({ error: { message: 'Malformed token sk-local-secret provided.' } }),
+      { status: 400 },
+    )
+  }) as typeof fetch
+
+  try {
+    const res = await POST(new Request('http://localhost/api/setup/check-provider', {
+      method: 'POST',
+      body: JSON.stringify({
+        provider: 'lmstudio',
+        endpoint: 'http://10.2.0.2:1234',
+      }),
+    }))
+    const payload = await res.json()
+
+    assert.equal(payload.ok, false)
+    assert.equal(payload.normalizedEndpoint, 'http://10.2.0.2:1234/v1')
+    assert.deepEqual(calls, [
+      'http://10.2.0.2:1234/v1/models',
+      'http://10.2.0.2:1234/v1/chat/completions',
+    ])
+    assert.ok(Array.isArray(payload.diagnostics))
+    assert.equal(payload.diagnostics[0].target, 'http://10.2.0.2:1234/v1')
+    assert.equal(payload.message, 'Malformed token sk-... provided.')
+    assert.equal(
+      payload.diagnostics.some((step: { detail?: string }) => step.detail?.includes('sk-local-secret')),
+      false,
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })

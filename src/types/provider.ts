@@ -28,6 +28,27 @@ export interface ProviderModelDiscoveryResult {
   message?: string
 }
 
+export type ProviderDiagnosticStatus = 'pass' | 'warn' | 'fail'
+
+export interface ProviderDiagnosticStep {
+  id: string
+  label: string
+  status: ProviderDiagnosticStatus
+  detail?: string
+  target?: string
+  durationMs?: number
+}
+
+export interface ProviderCheckResult {
+  ok: boolean
+  message: string
+  normalizedEndpoint?: string
+  recommendedModel?: string
+  errorCode?: string
+  deviceId?: string
+  diagnostics?: ProviderDiagnosticStep[]
+}
+
 export interface Credential {
   id: string
   provider: string

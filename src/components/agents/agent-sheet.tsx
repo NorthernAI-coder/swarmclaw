@@ -10,7 +10,7 @@ import { sleep } from '@/lib/shared-utils'
 import { BottomSheet } from '@/components/shared/bottom-sheet'
 import { toast } from 'sonner'
 import { ModelCombobox } from '@/components/shared/model-combobox'
-import type { ProviderType, ClaudeSkill, AgentPackManifest, AgentRoutingStrategy, AgentRoutingTarget } from '@/types'
+import type { ProviderType, ProviderDiagnosticStep, ClaudeSkill, AgentPackManifest, AgentRoutingStrategy, AgentRoutingTarget } from '@/types'
 import { AVAILABLE_TOOLS, PLATFORM_TOOLS } from '@/lib/tool-definitions'
 import { MCP_INJECTION_PROVIDER_IDS, NATIVE_CAPABILITY_PROVIDER_IDS, NON_LANGGRAPH_PROVIDER_IDS, WORKER_ONLY_PROVIDER_IDS } from '@/lib/provider-sets'
 import { isOrchestratorProviderEligible } from '@/lib/orchestrator-config'
@@ -33,6 +33,7 @@ import { buildAgentSelectableProviders, resolveAgentSelectableProviderCredential
 import { AgentSocialSettings } from '@/features/swarmfeed/agent-social-settings'
 import { AgentMarketplaceSettings } from '@/features/swarmdock/agent-marketplace-settings'
 import type { ConfigVersion } from '@/types/config-version'
+import { ProviderDiagnosticsList } from '@/components/providers/provider-diagnostics-list'
 
 const HB_PRESETS = [1800, 3600, 7200, 21600, 43200] as const
 const FALLBACK_ELEVENLABS_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb'
@@ -284,6 +285,7 @@ export function AgentSheet() {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'pass' | 'fail'>('idle')
   const [testMessage, setTestMessage] = useState('')
   const [testErrorCode, setTestErrorCode] = useState<string | null>(null)
+  const [testDiagnostics, setTestDiagnostics] = useState<ProviderDiagnosticStep[]>([])
   const [testDeviceId, setTestDeviceId] = useState<string | null>(null)
   const [openclawDeviceId, setOpenclawDeviceId] = useState<string | null>(null)
   const [configCopied, setConfigCopied] = useState(false)
@@ -426,6 +428,7 @@ export function AgentSheet() {
         .catch(() => {})
       setTestStatus('idle')
       setTestMessage('')
+      setTestDiagnostics([])
       setShowAdvancedSettings(false)
       if (editing) {
         setName(editing.name)
@@ -690,6 +693,7 @@ export function AgentSheet() {
   useEffect(() => {
     setTestStatus('idle')
     setTestMessage('')
+    setTestDiagnostics([])
   }, [provider, credentialId, apiEndpoint])
 
   // Fetch MCP tools when selected servers change
@@ -758,6 +762,7 @@ export function AgentSheet() {
     setTestStatus('idle')
     setTestMessage('')
     setTestErrorCode(null)
+    setTestDiagnostics([])
     setAddingKey(false)
     setNewKeyName('')
     setNewKeyValue('')
@@ -1047,8 +1052,9 @@ export function AgentSheet() {
     setTestStatus('testing')
     setTestMessage('')
     setTestErrorCode(null)
+    setTestDiagnostics([])
     try {
-      const result = await api<{ ok: boolean; message: string; errorCode?: string; deviceId?: string }>('POST', '/setup/check-provider', {
+      const result = await api<{ ok: boolean; message: string; errorCode?: string; deviceId?: string; diagnostics?: ProviderDiagnosticStep[] }>('POST', '/setup/check-provider', {
         provider,
         credentialId,
         endpoint: apiEndpoint,
@@ -1057,6 +1063,7 @@ export function AgentSheet() {
       }, {
         timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
       })
+      setTestDiagnostics(result.diagnostics ?? [])
       if (result.deviceId) setTestDeviceId(result.deviceId)
       if (result.ok) {
         let syncedModels: string[] = []
@@ -1084,6 +1091,7 @@ export function AgentSheet() {
       const msg = err instanceof Error ? err.message : 'Connection test failed'
       setTestStatus('fail')
       setTestMessage(msg)
+      setTestDiagnostics([])
       toast.error(msg)
       return false
     }
@@ -1317,6 +1325,10 @@ export function AgentSheet() {
             <button
               type="button"
               onClick={() => {
+                setTestStatus('idle')
+                setTestMessage('')
+                setTestErrorCode(null)
+                setTestDiagnostics([])
                 if (!openclawEnabled) {
                   setOpenclawEnabled(true)
                   setProvider('openclaw')
@@ -1330,9 +1342,6 @@ export function AgentSheet() {
                   setApiEndpoint(null)
                   setCredentialId(null)
                   setGatewayProfileId(null)
-                  setTestStatus('idle')
-                  setTestMessage('')
-                  setTestErrorCode(null)
                 }
               }}
               className={`relative h-6 w-11 rounded-full border-none transition-colors duration-200 ${openclawEnabled ? 'bg-accent-bright' : 'bg-white/[0.12]'}`}
@@ -1473,6 +1482,7 @@ export function AgentSheet() {
                 <p className="text-[14px] text-emerald-400 font-600">Connected</p>
               </div>
               <p className="text-[13px] text-text-2/80 leading-[1.6]">Gateway is reachable and this device is paired. Tools and models are managed by the OpenClaw instance.</p>
+              <ProviderDiagnosticsList diagnostics={testDiagnostics} />
             </div>
           )}
           {testStatus === 'fail' && (
@@ -1548,6 +1558,7 @@ export function AgentSheet() {
                   </p>
                 </div>
               )}
+              <ProviderDiagnosticsList diagnostics={testDiagnostics} />
             </div>
           )}
         </div>
@@ -2965,11 +2976,13 @@ export function AgentSheet() {
       {!openclawEnabled && testStatus === 'fail' && (
         <div className="mb-4 p-3 rounded-[12px] bg-red-500/[0.08] border border-red-500/20">
           <p className="text-[13px] text-red-400">{testMessage || 'Connection test failed'}</p>
+          <ProviderDiagnosticsList diagnostics={testDiagnostics} />
         </div>
       )}
       {!openclawEnabled && testStatus === 'pass' && (
         <div className="mb-4 p-3 rounded-[12px] bg-emerald-500/[0.08] border border-emerald-500/20">
           <p className="text-[13px] text-emerald-400">{testMessage || 'Connected successfully'}</p>
+          <ProviderDiagnosticsList diagnostics={testDiagnostics} />
         </div>
       )}
 

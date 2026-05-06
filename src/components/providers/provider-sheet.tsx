@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/stores/use-app-store'
 import { BottomSheet } from '@/components/shared/bottom-sheet'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+import { ProviderDiagnosticsList } from '@/components/providers/provider-diagnostics-list'
 import { toast } from 'sonner'
 import { errorMessage } from '@/lib/shared-utils'
 import {
@@ -17,6 +18,7 @@ import {
   useSaveCustomProviderMutation,
 } from '@/features/providers/queries'
 import { useCreateCredentialMutation, useCredentialsQuery } from '@/features/credentials/queries'
+import type { ProviderDiagnosticStep } from '@/types'
 
 export function ProviderSheet() {
   const open = useAppStore((s) => s.providerSheetOpen)
@@ -54,6 +56,7 @@ export function ProviderSheet() {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'pass' | 'fail'>('idle')
   const [testMessage, setTestMessage] = useState('')
   const [testModel, setTestModel] = useState('')
+  const [testDiagnostics, setTestDiagnostics] = useState<ProviderDiagnosticStep[]>([])
 
   const [liveModels, setLiveModels] = useState<string[]>([])
   const [liveLoading, setLiveLoading] = useState(false)
@@ -77,6 +80,7 @@ export function ProviderSheet() {
       setLiveCached(false)
       setTestStatus('idle')
       setTestMessage('')
+      setTestDiagnostics([])
       if (editingCustom) {
         setName(editingCustom.name)
         setBaseUrl(editingCustom.baseUrl || '')
@@ -108,6 +112,7 @@ export function ProviderSheet() {
   useEffect(() => {
     setTestStatus('idle')
     setTestMessage('')
+    setTestDiagnostics([])
   }, [credentialId, baseUrl])
 
   useEffect(() => {
@@ -121,6 +126,7 @@ export function ProviderSheet() {
     if (!isBuiltin) return
     setTestStatus('testing')
     setTestMessage('')
+    setTestDiagnostics([])
     try {
       const result = await checkProviderConnectionMutation.mutateAsync({
         provider: editingId || 'custom',
@@ -128,6 +134,7 @@ export function ProviderSheet() {
         endpoint: baseUrl,
         model: testModel || undefined,
       })
+      setTestDiagnostics(result.diagnostics ?? [])
       if (result.ok) {
         setTestStatus('pass')
         setTestMessage(result.message)
@@ -141,6 +148,7 @@ export function ProviderSheet() {
       const msg = err instanceof Error ? err.message : 'Connection test failed'
       setTestStatus('fail')
       setTestMessage(msg)
+      setTestDiagnostics([])
       toast.error(msg)
     }
   }
@@ -530,7 +538,7 @@ export function ProviderSheet() {
           </label>
           <select
             value={testModel}
-            onChange={(e) => { setTestModel(e.target.value); setTestStatus('idle'); setTestMessage('') }}
+            onChange={(e) => { setTestModel(e.target.value); setTestStatus('idle'); setTestMessage(''); setTestDiagnostics([]) }}
             className={`${inputClass} appearance-none cursor-pointer`}
             style={{ fontFamily: 'inherit' }}
           >
@@ -546,11 +554,13 @@ export function ProviderSheet() {
       {isBuiltin && testStatus === 'fail' && (
         <div className="mb-4 p-3 rounded-[12px] bg-red-500/[0.08] border border-red-500/20">
           <p className="text-[13px] text-red-400">{testMessage || 'Connection test failed'}</p>
+          <ProviderDiagnosticsList diagnostics={testDiagnostics} />
         </div>
       )}
       {isBuiltin && testStatus === 'pass' && (
         <div className="mb-4 p-3 rounded-[12px] bg-emerald-500/[0.08] border border-emerald-500/20">
           <p className="text-[13px] text-emerald-400">{testMessage || 'Connected successfully'}</p>
+          <ProviderDiagnosticsList diagnostics={testDiagnostics} />
         </div>
       )}
 
