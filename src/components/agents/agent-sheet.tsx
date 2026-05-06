@@ -27,10 +27,12 @@ import { resolveStoredOllamaMode } from '@/lib/ollama-mode'
 import { errorMessage } from '@/lib/shared-utils'
 import { getDefaultAgentToolIds } from '@/lib/agent-default-tools'
 import { AGENT_PLANNING_MODE_OPTIONS, describeAgentPlanningMode, normalizeAgentPlanningMode, type AgentPlanningMode } from '@/lib/agent-planning-mode'
+import { buildAgentConfigVersionSummary } from '@/lib/agent-config-history'
 import { getEnabledExtensionIds, getEnabledToolIds } from '@/lib/capability-selection'
 import { buildAgentSelectableProviders, resolveAgentSelectableProviderCredentials } from '@/lib/agent-provider-options'
 import { AgentSocialSettings } from '@/features/swarmfeed/agent-social-settings'
 import { AgentMarketplaceSettings } from '@/features/swarmdock/agent-marketplace-settings'
+import type { ConfigVersion } from '@/types/config-version'
 
 const HB_PRESETS = [1800, 3600, 7200, 21600, 43200] as const
 const FALLBACK_ELEVENLABS_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb'
@@ -292,6 +294,10 @@ export function AgentSheet() {
   const lastAutoSyncedModelsKeyRef = useRef<string | null>(null)
   const skipAutoModelRef = useRef(false)
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false)
+  const [configVersions, setConfigVersions] = useState<ConfigVersion[]>([])
+  const [configVersionsLoading, setConfigVersionsLoading] = useState(false)
+  const [configVersionsError, setConfigVersionsError] = useState<string | null>(null)
+  const [restoringConfigVersionId, setRestoringConfigVersionId] = useState<string | null>(null)
 
   const handleFileUpload = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -360,6 +366,23 @@ export function AgentSheet() {
     setModel((currentModel) => currentModel.trim() || result.models[0] || '')
     return { synced: !sameModels, models: result.models }
   }, [agentSelectableProviders, loadProviders, openclawEnabled])
+
+  const loadAgentConfigVersions = useCallback(async (agentId: string) => {
+    setConfigVersionsLoading(true)
+    setConfigVersionsError(null)
+    try {
+      const response = await api<{ versions: ConfigVersion[] }>(
+        'GET',
+        `/config-versions?entityKind=agent&entityId=${encodeURIComponent(agentId)}`,
+      )
+      setConfigVersions(Array.isArray(response.versions) ? response.versions : [])
+    } catch (err) {
+      setConfigVersions([])
+      setConfigVersionsError(errorMessage(err))
+    } finally {
+      setConfigVersionsLoading(false)
+    }
+  }, [])
 
   const providerNeedsKey = !editing && (
     (currentProvider?.requiresApiKey && providerCredentials.length === 0 && !addingKey) ||
@@ -641,6 +664,17 @@ export function AgentSheet() {
   }, [open, editingId])
 
   useEffect(() => {
+    if (!open || !editingId) {
+      setConfigVersions([])
+      setConfigVersionsError(null)
+      setConfigVersionsLoading(false)
+      setRestoringConfigVersionId(null)
+      return
+    }
+    void loadAgentConfigVersions(editingId)
+  }, [editingId, loadAgentConfigVersions, open])
+
+  useEffect(() => {
     if (skipAutoModelRef.current) {
       skipAutoModelRef.current = false
       return
@@ -891,6 +925,33 @@ export function AgentSheet() {
     }
   }
 
+  const handleRestoreConfigVersion = async (versionId: string) => {
+    if (!editing) return
+    const confirmed = window.confirm('Restore this saved agent configuration? Current settings will become a new history entry when restored.')
+    if (!confirmed) return
+    setRestoringConfigVersionId(versionId)
+    try {
+      await api('POST', '/config-versions/restore', { versionId })
+      await loadAgents()
+      if (
+        activeSessionId
+        && currentSession?.agentId === editing.id
+        && (
+          currentSession.shortcutForAgentId === editing.id
+          || activeSessionId === editing.threadSessionId
+        )
+      ) {
+        await refreshSession(activeSessionId)
+      }
+      toast.success('Agent configuration restored')
+      onClose()
+    } catch (err) {
+      toast.error(`Restore failed: ${errorMessage(err)}`)
+    } finally {
+      setRestoringConfigVersionId(null)
+    }
+  }
+
   const handleExport = () => {
     if (!editing) return
     const recommendedProviders = agentSelectableProviders.some((providerOption) => (
@@ -1100,6 +1161,7 @@ export function AgentSheet() {
   }
 
   const inputClass = "w-full px-4 py-3.5 rounded-[14px] border border-white/[0.08] bg-surface text-text text-[15px] outline-none transition-all duration-200 placeholder:text-text-3/50 focus-glow"
+  const configVersionSummaries = configVersions.map((version) => buildAgentConfigVersionSummary(version))
 
   return (
     <>
@@ -2786,6 +2848,63 @@ export function AgentSheet() {
         </div>
       </div>
       </SectionCard>
+
+      {editing && (
+        <SectionCard
+          title="Configuration History"
+          description="Recent saved versions for this agent."
+          className="mb-6 border-white/[0.05] bg-white/[0.01]"
+          action={(
+            <button
+              type="button"
+              onClick={() => void loadAgentConfigVersions(editing.id)}
+              disabled={configVersionsLoading}
+              className="px-3 py-2 rounded-[10px] border border-white/[0.08] bg-transparent text-[12px] font-600 text-text-3 hover:bg-white/[0.04] hover:text-text-2 transition-all disabled:opacity-50"
+              style={{ fontFamily: 'inherit' }}
+            >
+              {configVersionsLoading ? 'Refreshing' : 'Refresh'}
+            </button>
+          )}
+        >
+          {configVersionsError ? (
+            <div className="rounded-[12px] border border-red-500/20 bg-red-500/[0.06] p-3 text-[13px] text-red-300">
+              {configVersionsError}
+            </div>
+          ) : configVersionsLoading && configVersionSummaries.length === 0 ? (
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.02] p-3 text-[13px] text-text-3">
+              Loading saved versions...
+            </div>
+          ) : configVersionSummaries.length === 0 ? (
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.02] p-3 text-[13px] text-text-3">
+              No saved versions yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {configVersionSummaries.slice(0, 8).map((summary) => (
+                <div
+                  key={summary.id}
+                  className="flex flex-col gap-3 rounded-[12px] border border-white/[0.06] bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[14px] font-700 text-text">{summary.title}</div>
+                    <div className="mt-1 truncate text-[12px] text-text-3">{summary.subtitle}</div>
+                    <div className="mt-1 text-[11px] text-text-3/70">{summary.meta}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreConfigVersion(summary.id)}
+                    disabled={Boolean(restoringConfigVersionId)}
+                    className="shrink-0 rounded-[10px] border border-accent-bright/20 bg-accent-soft/30 px-3 py-2 text-[12px] font-700 text-accent-bright transition-all hover:bg-accent-soft disabled:opacity-50"
+                    style={{ fontFamily: 'inherit' }}
+                  >
+                    {restoringConfigVersionId === summary.id ? 'Restoring' : 'Restore'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard
         title="Utilities"

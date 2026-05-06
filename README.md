@@ -149,6 +149,14 @@ clawhub install swarmclaw
 
 [Browse on ClawHub](https://clawhub.ai/skills/swarmclaw)
 
+## v1.9.17 Highlights
+
+Agent configuration history is now visible in the agent editor, so operators can review recent saved versions and restore prior settings without leaving the agent workflow.
+
+- **Agent sheet history.** Advanced agent settings list recent saved versions with timestamp, actor, and provider/model snapshot.
+- **One-click restore.** Restoring a prior version uses the existing config-version restore API, refreshes agent state, and closes the sheet to avoid stale form data.
+- **Regression coverage.** New tests cover config-version list/restore routes and UI summary formatting.
+
 ## Hosted Deploys
 
 SwarmClaw now ships provider-ready deploy files at the repo root:
