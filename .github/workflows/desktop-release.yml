@@ -109,27 +109,27 @@ jobs:
         if: matrix.os == 'macos-latest'
         shell: bash
         env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_SECRET: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID_SECRET: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_SECRET: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
           has_certificate=false
           has_apple_id_notary=false
           has_api_key_notary=false
 
-          if [ -n "${CSC_LINK:-}" ] && [ -n "${CSC_KEY_PASSWORD:-}" ]; then
+          if [ -n "${CSC_LINK_SECRET:-}" ] && [ -n "${CSC_KEY_PASSWORD_SECRET:-}" ]; then
             has_certificate=true
           fi
-          if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+          if [ -n "${APPLE_ID_SECRET:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD_SECRET:-}" ] && [ -n "${APPLE_TEAM_ID_SECRET:-}" ]; then
             has_apple_id_notary=true
           fi
-          if [ -n "${APPLE_API_KEY:-}" ] && [ -n "${APPLE_API_KEY_ID:-}" ] && [ -n "${APPLE_API_ISSUER:-}" ]; then
+          if [ -n "${APPLE_API_KEY_SECRET:-}" ] && [ -n "${APPLE_API_KEY_ID_SECRET:-}" ] && [ -n "${APPLE_API_ISSUER_SECRET:-}" ]; then
             has_api_key_notary=true
           fi
 
@@ -139,18 +139,53 @@ jobs:
             echo "Developer ID signing and notarization inputs are incomplete; macOS artifacts will remain ad-hoc signed."
           fi
 
+      - name: Export macOS signing environment
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD_SECRET: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID_SECRET: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD_SECRET: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID_SECRET: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_SECRET: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID_SECRET: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_SECRET: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+
+          append_env() {
+            local name="$1"
+            local value="$2"
+            local delimiter="SWARMCLAW_${name}_$(uuidgen | tr -d '-')"
+            {
+              echo "${name}<<${delimiter}"
+              printf '%s\n' "$value"
+              echo "${delimiter}"
+            } >> "$GITHUB_ENV"
+          }
+
+          if [ -n "${CSC_LINK_SECRET:-}" ] && [ -n "${CSC_KEY_PASSWORD_SECRET:-}" ]; then
+            append_env CSC_LINK "$CSC_LINK_SECRET"
+            append_env CSC_KEY_PASSWORD "$CSC_KEY_PASSWORD_SECRET"
+          fi
+
+          if [ -n "${APPLE_ID_SECRET:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD_SECRET:-}" ] && [ -n "${APPLE_TEAM_ID_SECRET:-}" ]; then
+            append_env APPLE_ID "$APPLE_ID_SECRET"
+            append_env APPLE_APP_SPECIFIC_PASSWORD "$APPLE_APP_SPECIFIC_PASSWORD_SECRET"
+            append_env APPLE_TEAM_ID "$APPLE_TEAM_ID_SECRET"
+          fi
+
+          if [ -n "${APPLE_API_KEY_SECRET:-}" ] && [ -n "${APPLE_API_KEY_ID_SECRET:-}" ] && [ -n "${APPLE_API_ISSUER_SECRET:-}" ]; then
+            append_env APPLE_API_KEY "$APPLE_API_KEY_SECRET"
+            append_env APPLE_API_KEY_ID "$APPLE_API_KEY_ID_SECRET"
+            append_env APPLE_API_ISSUER "$APPLE_API_ISSUER_SECRET"
+          fi
+
       - name: Build desktop app
         run: npm run ${{ matrix.script }} -- --publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           NEXT_TELEMETRY_DISABLED: '1'
 
       - name: Upload build logs on failure

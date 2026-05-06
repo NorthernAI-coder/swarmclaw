@@ -26,8 +26,17 @@ describe('macOS desktop signing configuration', () => {
       'APPLE_API_ISSUER',
     ]) {
       assert.ok(
-        desktopWorkflow.includes(`${secretName}: \${{ secrets.${secretName} }}`),
-        `desktop release workflow should forward ${secretName}`,
+        desktopWorkflow.includes(`${secretName}_SECRET: \${{ secrets.${secretName} }}`),
+        `desktop release workflow should read ${secretName} through a guarded secret alias`,
+      )
+      assert.ok(
+        desktopWorkflow.includes(`append_env ${secretName} "$${secretName}_SECRET"`),
+        `desktop release workflow should export ${secretName} only after guard checks`,
+      )
+      assert.equal(
+        desktopWorkflow.includes(`          ${secretName}: \${{ secrets.${secretName} }}`),
+        false,
+        `desktop release build step should not pass empty ${secretName} directly to electron-builder`,
       )
     }
 
