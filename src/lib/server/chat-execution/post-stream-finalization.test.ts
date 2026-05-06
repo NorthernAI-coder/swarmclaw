@@ -33,6 +33,28 @@ describe('stripLeakedClassificationJson', () => {
     assert.equal(cleaned.includes('taskIntent'), false)
   })
 
+  it('strips multiple leaked classification JSON blocks', () => {
+    const input = `${VALID_LEAK}\n${VALID_LEAK}\nTask created and delegated.`
+    const { cleaned, stripped } = stripLeakedClassificationJson(input)
+    assert.equal(stripped, true)
+    assert.equal(cleaned, 'Task created and delegated.')
+  })
+
+  it('strips a malformed internal prelude after a validated leaked block', () => {
+    const malformedPrelude = [
+      '{',
+      '  "taskIntent": "research",',
+      '  "isBroadGoal":{',
+      '  false,',
+      '  "isLightweightDirectChat": false,',
+      '}',
+    ].join('\n')
+    const input = `${VALID_LEAK}\n${malformedPrelude}\nAll five research bundles reviewed.`
+    const { cleaned, stripped } = stripLeakedClassificationJson(input)
+    assert.equal(stripped, true)
+    assert.equal(cleaned, 'All five research bundles reviewed.')
+  })
+
   it('leaves normal assistant text untouched', () => {
     const input = 'Your favorite color is blue.'
     const { cleaned, stripped } = stripLeakedClassificationJson(input)

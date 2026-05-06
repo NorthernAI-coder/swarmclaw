@@ -8,6 +8,7 @@
 import type { KnowledgeRetrievalTrace, Session, UsageRecord } from '@/types'
 import { log } from '@/lib/server/logger'
 import type { ChatTurnState } from '@/lib/server/chat-execution/chat-turn-state'
+import { stripAllInternalMetadata } from '@/lib/strip-internal-metadata'
 
 const TAG = 'post-stream'
 import { extractSuggestions } from '@/lib/server/suggestions'
@@ -20,7 +21,6 @@ import {
   shouldForceExternalServiceSummary,
 } from '@/lib/server/chat-execution/chat-streaming-utils'
 import {
-  MessageClassificationSchema,
   type MessageClassification,
 } from '@/lib/server/chat-execution/message-classifier'
 import {
@@ -28,48 +28,9 @@ import {
 } from '@/lib/server/chat-execution/stream-continuation'
 import { buildForcedExternalServiceSummary } from '@/lib/server/chat-execution/prompt-builder'
 
-// ---------------------------------------------------------------------------
-// Classification JSON leak detection — strips MessageClassification objects
-// that some models echo verbatim into their response text. Candidate JSON
-// substrings are found by brace-matching, then validated against the actual
-// MessageClassificationSchema — the single source of truth for what a
-// classifier object looks like.
-// ---------------------------------------------------------------------------
-
-/** Returns the index just past the balanced `}` for the `{` at `start`, or -1. */
-function findBalancedObjectEnd(text: string, start: number): number {
-  let depth = 0
-  let inString = false
-  let escape = false
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i]
-    if (escape) { escape = false; continue }
-    if (inString) {
-      if (ch === '\\') escape = true
-      else if (ch === '"') inString = false
-      continue
-    }
-    if (ch === '"') inString = true
-    else if (ch === '{') depth += 1
-    else if (ch === '}') {
-      depth -= 1
-      if (depth === 0) return i + 1
-    }
-  }
-  return -1
-}
-
 export function stripLeakedClassificationJson(text: string): { cleaned: string; stripped: boolean } {
-  for (let i = text.indexOf('{'); i !== -1; i = text.indexOf('{', i + 1)) {
-    const end = findBalancedObjectEnd(text, i)
-    if (end === -1) break
-    let parsed: unknown
-    try { parsed = JSON.parse(text.slice(i, end)) } catch { continue }
-    if (!MessageClassificationSchema.safeParse(parsed).success) continue
-    log.warn(TAG, 'Stripped leaked classification JSON from model output')
-    return { cleaned: (text.slice(0, i) + text.slice(end)).trimStart(), stripped: true }
-  }
-  return { cleaned: text, stripped: false }
+  const cleaned = stripAllInternalMetadata(text)
+  return { cleaned, stripped: cleaned !== text }
 }
 
 // StreamAgentChatResult is defined inline to avoid circular dependency with stream-agent-chat.ts
@@ -174,9 +135,10 @@ export async function finalizeStreamResult(opts: FinalizeStreamResultOpts): Prom
     }
   }
 
-  // Strip leaked classification JSON from model output (e.g. `{ "isDeliverableTask": true, ... }`)
+  // Strip leaked internal metadata from model output (e.g. `{ "isDeliverableTask": true, ... }`)
   const leakResult = stripLeakedClassificationJson(state.fullText)
   if (leakResult.stripped) {
+    log.warn(TAG, 'Stripped leaked internal metadata from model output')
     state.fullText = leakResult.cleaned
     // Emit a reset so the frontend re-renders with the cleaned text
     write(`data: ${JSON.stringify({ t: 'reset', text: leakResult.cleaned })}\n\n`)

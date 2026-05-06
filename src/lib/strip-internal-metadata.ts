@@ -25,6 +25,9 @@ const INTERNAL_JSON_KEYS = [
 
 export const INTERNAL_KEY_RE = new RegExp(`"(?:${INTERNAL_JSON_KEYS.join('|')})"`)
 
+const TaskIntentLikeSchema = z.enum(['coding', 'research', 'browsing', 'outreach', 'scheduling', 'general']).optional()
+const WorkTypeLikeSchema = z.enum(['coding', 'research', 'writing', 'review', 'operations', 'general']).optional()
+
 const WorkingStatePatchLikeSchema = z.object({
   factsUpsert: z.array(z.unknown()).optional(),
   artifactsUpsert: z.array(z.unknown()).optional(),
@@ -37,13 +40,15 @@ const WorkingStatePatchLikeSchema = z.object({
 }).passthrough()
 
 const MessageClassificationLikeSchema = z.object({
-  taskIntent: z.string().optional(),
+  taskIntent: TaskIntentLikeSchema,
   isLightweightDirectChat: z.boolean().optional(),
   isDeliverableTask: z.boolean().optional(),
   isBroadGoal: z.boolean().optional(),
   hasHumanSignals: z.boolean().optional(),
+  hasSignificantEvent: z.boolean().optional(),
   explicitToolRequests: z.array(z.unknown()).optional(),
   isResearchSynthesis: z.boolean().optional(),
+  workType: WorkTypeLikeSchema,
   confidence: z.number().optional(),
 }).passthrough()
 
@@ -104,6 +109,13 @@ function objectIsInternalMetadata(obj: Record<string, unknown>): boolean {
   return false
 }
 
+function isDistinctiveInternalKey(key: string): boolean {
+  for (const { distinctiveKeys } of INTERNAL_PAYLOAD_RULES) {
+    if (distinctiveKeys.includes(key)) return true
+  }
+  return false
+}
+
 function findBalancedJsonObjectEnd(text: string, start: number): number {
   if (text.charAt(start) !== '{') return -1
   let depth = 0
@@ -130,6 +142,109 @@ function findBalancedJsonObjectEnd(text: string, start: number): number {
   return -1
 }
 
+function parseQuotedKeyAt(text: string, start: number): { key: string; end: number } | null {
+  if (text.charAt(start) !== '"') return null
+  let key = ''
+  let escaped = false
+  for (let i = start + 1; i < text.length; i += 1) {
+    const c = text.charAt(i)
+    if (escaped) {
+      key += c
+      escaped = false
+      continue
+    }
+    if (c === '\\') {
+      escaped = true
+      continue
+    }
+    if (c !== '"') {
+      key += c
+      continue
+    }
+    let cursor = i + 1
+    while (cursor < text.length && /\s/.test(text.charAt(cursor))) cursor += 1
+    if (text.charAt(cursor) !== ':') return null
+    return { key, end: cursor + 1 }
+  }
+  return null
+}
+
+function lineHasDistinctiveInternalKey(line: string): boolean {
+  for (let i = 0; i < line.length; i += 1) {
+    const parsed = parseQuotedKeyAt(line, i)
+    if (!parsed) continue
+    if (isDistinctiveInternalKey(parsed.key)) return true
+    i = parsed.end - 1
+  }
+  return false
+}
+
+function startsWithJsonLiteral(text: string, value: string): boolean {
+  if (!text.startsWith(value)) return false
+  const next = text.charAt(value.length)
+  return next === '' || next === ',' || next === '}' || next === ']' || /\s/.test(next)
+}
+
+function isMalformedJsonFragmentLine(line: string): boolean {
+  const trimmed = line.trim()
+  if (!trimmed) return true
+  const first = trimmed.charAt(0)
+  if (first === '{' || first === '}' || first === '[' || first === ']' || first === '"' || first === ',' || first === ':') {
+    return true
+  }
+  if (startsWithJsonLiteral(trimmed, 'true')) return true
+  if (startsWithJsonLiteral(trimmed, 'false')) return true
+  if (startsWithJsonLiteral(trimmed, 'null')) return true
+  if (trimmed.startsWith('...')) return true
+  return false
+}
+
+function findInlineVisibleTextAfterClosingBrace(line: string): number {
+  for (let i = 0; i < line.length; i += 1) {
+    if (line.charAt(i) !== '}') continue
+    let cursor = i + 1
+    while (cursor < line.length && /\s/.test(line.charAt(cursor))) cursor += 1
+    const next = line.charAt(cursor)
+    if (!next || next === ',' || next === '}' || next === ']') continue
+    return i + 1
+  }
+  return -1
+}
+
+function findMalformedInternalPreludeEnd(text: string): number {
+  let leading = 0
+  while (leading < text.length && /\s/.test(text.charAt(leading))) leading += 1
+  if (text.charAt(leading) !== '{') return -1
+
+  let cursor = leading
+  let sawDistinctiveKey = false
+  let consumedEnd = -1
+  while (cursor < text.length) {
+    const newlineAt = text.indexOf('\n', cursor)
+    const lineEnd = newlineAt === -1 ? text.length : newlineAt
+    const line = text.slice(cursor, lineEnd)
+    if (lineHasDistinctiveInternalKey(line)) sawDistinctiveKey = true
+
+    if (!isMalformedJsonFragmentLine(line)) {
+      return sawDistinctiveKey && consumedEnd > leading ? consumedEnd : -1
+    }
+
+    const inlineEnd = sawDistinctiveKey ? findInlineVisibleTextAfterClosingBrace(line) : -1
+    if (inlineEnd >= 0) return cursor + inlineEnd
+
+    consumedEnd = newlineAt === -1 ? lineEnd : lineEnd + 1
+    cursor = consumedEnd
+  }
+
+  return -1
+}
+
+function stripMalformedInternalPreludeAfterStrictStrip(text: string): string {
+  const end = findMalformedInternalPreludeEnd(text)
+  if (end < 0) return text
+  return text.slice(end).trimStart()
+}
+
 /**
  * Remove top-level `{ ... }` blocks that contain known internal classification keys.
  * Handles nested and multi-line JSON. Only strips blocks where at least one
@@ -137,6 +252,7 @@ function findBalancedJsonObjectEnd(text: string, start: number): number {
  */
 export function stripInternalJson(text: string): string {
   let out = text || ''
+  let removedLeadingInternalJson = false
   for (let guard = 0; guard < 32; guard += 1) {
     let removed = false
     for (let i = 0; i < out.length; i += 1) {
@@ -152,11 +268,15 @@ export function stripInternalJson(text: string): string {
       }
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
       if (!objectIsInternalMetadata(parsed as Record<string, unknown>)) continue
+      if (!out.slice(0, i).trim()) removedLeadingInternalJson = true
       out = (out.slice(0, i).replace(/\s+$/, '') + ' ' + out.slice(end).replace(/^\s+/, '')).trim()
       removed = true
       break
     }
     if (!removed) break
+  }
+  if (removedLeadingInternalJson) {
+    out = stripMalformedInternalPreludeAfterStrictStrip(out)
   }
   return out
 }

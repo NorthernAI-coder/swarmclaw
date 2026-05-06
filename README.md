@@ -407,6 +407,15 @@ Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
 
+### v1.9.19 Highlights
+
+Output hygiene release: final assistant responses now use the shared internal metadata scrubber before persistence, UI reset, connector delivery, and completion hooks.
+
+- **Multi-block scrubbing.** Repeated internal metadata payloads are stripped in one pass instead of stopping after the first block.
+- **Malformed prelude cleanup.** When a validated internal block is followed by a malformed internal fragment, the leftover prelude is removed before user-facing text is delivered.
+- **Shared finalizer path.** Post-stream finalization now uses the same metadata scrubber as the chat UI, keeping stored, streamed, and connector-visible output aligned.
+- **Regression coverage.** Tests cover repeated classifier-shape blocks, malformed follow-on fragments, and false-positive protection for malformed text without a prior validated strip.
+
 ### v1.9.18 Highlights
 
 Schedule preflight release: schedules now show server-backed timing forecasts before save, with timezone-aware cron previews and warnings for risky drafts.

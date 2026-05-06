@@ -64,6 +64,41 @@ describe('stripInternalJson', () => {
     assert.doesNotMatch(result, /isDeliverableTask/)
     assert.match(result, /\{ "foo": "bar" \}/)
   })
+
+  it('removes multiple leading internal JSON blocks', () => {
+    const input = [
+      '{ "isDeliverableTask": true, "confidence": 0.9 }',
+      '{ "factsUpsert": [], "questionsUpsert": [] }',
+      'All queued work is complete.',
+    ].join('\n')
+    assert.equal(stripInternalJson(input), 'All queued work is complete.')
+  })
+
+  it('removes a malformed internal prelude only after a strict leading strip', () => {
+    const input = [
+      '{ "isDeliverableTask": true, "confidence": 0.9 }',
+      '{',
+      '  "taskIntent": "research",',
+      '  "isBroadGoal":{',
+      '  false,',
+      '  "isLightweightDirectChat": false,',
+      '}',
+      'All queued work is complete.',
+    ].join('\n')
+    assert.equal(stripInternalJson(input), 'All queued work is complete.')
+  })
+
+  it('preserves malformed internal-looking text without a strict leading strip', () => {
+    const input = [
+      '{',
+      '  "taskIntent": "research",',
+      '  "isBroadGoal":{',
+      '  false,',
+      '}',
+      'Visible answer.',
+    ].join('\n')
+    assert.equal(stripInternalJson(input), input)
+  })
 })
 
 // ---------------------------------------------------------------------------
