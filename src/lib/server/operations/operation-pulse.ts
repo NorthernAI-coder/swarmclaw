@@ -84,8 +84,10 @@ function gatewayAttentionReason(gateway: GatewayProfile, now: number): {
   const errorCount = gateway.stats?.lastTopologyErrorCount || 0
   const checkedAt = gateway.stats?.lastTopologyCheckedAt || gateway.lastCheckedAt || null
   const staleTopology = !checkedAt || now - checkedAt > GATEWAY_TOPOLOGY_STALE_MS
+  const lifecycleState = gateway.lifecycleState || 'active'
   const evidence = [
     `status:${gateway.status}`,
+    `lifecycle:${lifecycleState}`,
     `${gateway.stats?.connectedNodeCount || 0}/${gateway.stats?.nodeCount || 0} nodes`,
     `${gateway.stats?.availableEnvironmentCount || 0}/${gateway.stats?.environmentCount || 0} environments`,
   ]
@@ -102,6 +104,22 @@ function gatewayAttentionReason(gateway: GatewayProfile, now: number): {
     return {
       severity: 'high',
       summary: `${gateway.name} is degraded${gateway.lastError ? `: ${gateway.lastError}` : '.'}`,
+      evidence,
+    }
+  }
+
+  if (lifecycleState === 'cordoned') {
+    return {
+      severity: 'medium',
+      summary: `${gateway.name} is cordoned from automatic new work.`,
+      evidence,
+    }
+  }
+
+  if (lifecycleState === 'draining') {
+    return {
+      severity: 'medium',
+      summary: `${gateway.name} is draining and will not receive automatic new work.`,
       evidence,
     }
   }

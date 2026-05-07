@@ -364,6 +364,11 @@ export const ExternalAgentUpdateSchema = z.object({
   }).nullable().optional(),
 })
 
+export const GatewayControlSchema = z.object({
+  action: z.enum(['activate', 'drain', 'cordon', 'restart']),
+  reason: z.string().max(500).nullable().optional(),
+}).strict()
+
 export const ChatroomCreateSchema = z.object({
   name: z.string().min(1, 'Chatroom name is required'),
   agentIds: z.array(z.string()).min(1, 'Select at least one agent').default([]),

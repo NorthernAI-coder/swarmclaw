@@ -106,6 +106,12 @@ async function hydrateSlackThreadContext(params: {
   }
 }
 
+export function shouldAcceptSlackMessageEvent(message: unknown, botUserId?: string): boolean {
+  if (!message || typeof message !== 'object' || !('text' in message)) return false
+  const msg = message as { user?: unknown }
+  return !(botUserId && typeof msg.user === 'string' && msg.user === botUserId)
+}
+
 const slack: PlatformConnector = {
   async start(connector, botToken, onMessage): Promise<ConnectorInstance> {
     const appToken = connector.config.appToken || ''
@@ -173,10 +179,9 @@ const slack: PlatformConnector = {
 
     // Handle messages
     app.message(async ({ message, say, client }) => {
-      // Only handle user messages (not bot messages or own messages)
-      if (!('text' in message) || ('bot_id' in message)) return
+      // Bot-to-bot collaboration still flows through the normal connector policy gates.
+      if (!shouldAcceptSlackMessageEvent(message, botUserId)) return
       const msg = message as any
-      if (botUserId && msg.user === botUserId) return
 
       const channelId = msg.channel
       if (allowedChannels && !allowedChannels.includes(channelId)) return

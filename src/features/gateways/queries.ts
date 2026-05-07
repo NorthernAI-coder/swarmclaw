@@ -38,6 +38,12 @@ interface SaveGatewayProfileInput {
   payload: Record<string, unknown>
 }
 
+interface GatewayControlInput {
+  id: string
+  action: 'activate' | 'drain' | 'cordon' | 'restart'
+  reason?: string | null
+}
+
 interface VerifyOpenClawDeployInput {
   endpoint: string
   token?: string
@@ -124,6 +130,17 @@ export function useGatewayHealthCheckMutation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => api('GET', `/gateways/${id}/health`),
+    onSuccess: async () => {
+      await invalidateGatewayQueries(queryClient)
+    },
+  })
+}
+
+export function useGatewayControlMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action, reason }: GatewayControlInput) =>
+      api('POST', `/gateways/${id}/control`, { action, reason }),
     onSuccess: async () => {
       await invalidateGatewayQueries(queryClient)
     },

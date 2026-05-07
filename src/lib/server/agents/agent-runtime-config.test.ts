@@ -17,6 +17,11 @@ function makeGateway(overrides: Partial<GatewayProfile> = {}): GatewayProfile {
     wsUrl: 'wss://gateway.example.com',
     credentialId: 'cred-gateway',
     status: 'healthy',
+    lifecycleState: 'active',
+    lastControlAction: null,
+    lastControlActionAt: null,
+    lastControlReason: null,
+    controlRequest: null,
     tags: [],
     isDefault: true,
     createdAt: now,
@@ -60,6 +65,81 @@ test('resolveAgentRouteCandidatesWithProfiles applies the default OpenClaw gatew
   assert.equal(route.gatewayProfileId, 'gateway-default')
   assert.equal(route.credentialId, 'cred-gateway')
   assert.equal(route.apiEndpoint, normalizeProviderEndpoint('openclaw', 'https://gateway.example.com/v1'))
+})
+
+test('resolveAgentRouteCandidatesWithProfiles routes around draining default gateways', () => {
+  const gateways = [
+    makeGateway({
+      lifecycleState: 'draining',
+    }),
+    makeGateway({
+      id: 'gateway-secondary',
+      name: 'Gateway Secondary',
+      endpoint: 'https://secondary.example.com/v1',
+      wsUrl: 'wss://secondary.example.com',
+      credentialId: 'cred-secondary',
+      isDefault: false,
+    }),
+  ]
+
+  const [route] = resolveAgentRouteCandidatesWithProfiles(makeAgent(), gateways)
+  assert.ok(route)
+  assert.equal(route.gatewayProfileId, 'gateway-secondary')
+  assert.equal(route.credentialId, 'cred-secondary')
+  assert.equal(route.apiEndpoint, normalizeProviderEndpoint('openclaw', 'https://secondary.example.com/v1'))
+})
+
+test('resolveAgentRouteCandidatesWithProfiles ignores cordoned preferred gateways', () => {
+  const gateways = [
+    makeGateway({
+      id: 'gateway-specialized',
+      name: 'Specialized Gateway',
+      tags: ['browser'],
+      lifecycleState: 'cordoned',
+    }),
+    makeGateway({
+      id: 'gateway-active',
+      name: 'Active Gateway',
+      endpoint: 'https://active.example.com/v1',
+      wsUrl: 'wss://active.example.com',
+      credentialId: 'cred-active',
+      tags: [],
+      isDefault: false,
+    }),
+  ]
+
+  const [route] = resolveAgentRouteCandidatesWithProfiles(makeAgent(), gateways, undefined, undefined, {
+    preferredGatewayTags: ['browser'],
+  })
+  assert.ok(route)
+  assert.equal(route.gatewayProfileId, 'gateway-active')
+})
+
+test('resolveAgentRouteCandidatesWithProfiles drops OpenClaw routes when every gateway is cordoned', () => {
+  const routes = resolveAgentRouteCandidatesWithProfiles(makeAgent({
+    gatewayProfileId: 'gateway-default',
+  }), [
+    makeGateway({
+      lifecycleState: 'cordoned',
+    }),
+  ])
+
+  assert.equal(routes.length, 0)
+})
+
+test('resolveAgentRouteCandidatesWithProfiles keeps explicit direct OpenClaw routes while saved gateways are cordoned', () => {
+  const [route] = resolveAgentRouteCandidatesWithProfiles(makeAgent({
+    gatewayProfileId: null,
+    apiEndpoint: 'https://direct.example.com/v1',
+  }), [
+    makeGateway({
+      lifecycleState: 'cordoned',
+    }),
+  ])
+
+  assert.ok(route)
+  assert.equal(route.gatewayProfileId, null)
+  assert.equal(route.apiEndpoint, normalizeProviderEndpoint('openclaw', 'https://direct.example.com/v1'))
 })
 
 test('resolveAgentRouteCandidatesWithProfiles respects routing strategy but deprioritizes cooling providers', () => {

@@ -13,6 +13,7 @@ import {
 import { useCredentialsQuery, useCreateCredentialMutation } from '@/features/credentials/queries'
 import {
   useCloneGatewayProfileMutation,
+  useGatewayControlMutation,
   useDeleteGatewayProfileMutation,
   useGatewayFleetTopologyQuery,
   useGatewayHealthCheckMutation,
@@ -22,7 +23,7 @@ import {
   useVerifyOpenClawDeployMutation,
 } from '@/features/gateways/queries'
 import { useExternalAgentsQuery, useExternalAgentRuntimeMutation } from '@/features/external-agents/queries'
-import type { GatewayProfile } from '@/types'
+import type { GatewayControlAction, GatewayLifecycleState, GatewayProfile } from '@/types'
 import { dedup } from '@/lib/shared-utils'
 import { PageLoader } from '@/components/ui/page-loader'
 import { StatusDot } from '@/components/ui/status-dot'
@@ -45,6 +46,18 @@ function formatRuntimeTimestamp(value: number | null | undefined): string {
   }).format(value)
 }
 
+function gatewayLifecycleLabel(value: GatewayLifecycleState | null | undefined): string {
+  if (value === 'draining') return 'Draining'
+  if (value === 'cordoned') return 'Cordoned'
+  return 'Active'
+}
+
+function gatewayLifecycleBadgeClass(value: GatewayLifecycleState | null | undefined): string {
+  if (value === 'draining') return 'border-amber-400/20 bg-amber-400/[0.08] text-amber-200'
+  if (value === 'cordoned') return 'border-rose-400/20 bg-rose-400/[0.08] text-rose-200'
+  return 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-200'
+}
+
 export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const setProviderSheetOpen = useAppStore((s) => s.setProviderSheetOpen)
   const setEditingProviderId = useAppStore((s) => s.setEditingProviderId)
@@ -63,6 +76,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
   const saveGatewayMutation = useSaveGatewayProfileMutation()
   const deleteGatewayMutation = useDeleteGatewayProfileMutation()
   const healthCheckGatewayMutation = useGatewayHealthCheckMutation()
+  const gatewayControlMutation = useGatewayControlMutation()
   const refreshGatewayTopologyMutation = useRefreshGatewayTopologyMutation()
   const verifyDeployMutation = useVerifyOpenClawDeployMutation()
   const cloneGatewayMutation = useCloneGatewayProfileMutation()
@@ -211,6 +225,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
         credentialId: gateway.credentialId || null,
         notes: gateway.notes || null,
         tags: gateway.tags || [],
+        lifecycleState: 'active',
         deployment: gateway.deployment || null,
         stats: gateway.stats || null,
         isDefault: false,
@@ -218,6 +233,27 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
       toast.success('Gateway cloned')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to clone gateway')
+    }
+  }
+
+  const handleGatewayControl = async (
+    e: React.MouseEvent,
+    gatewayId: string,
+    action: GatewayControlAction,
+  ) => {
+    e.stopPropagation()
+    try {
+      await gatewayControlMutation.mutateAsync({ id: gatewayId, action })
+      const actionLabel = action === 'activate'
+        ? 'Gateway activated'
+        : action === 'drain'
+          ? 'Gateway draining'
+          : action === 'cordon'
+            ? 'Gateway cordoned'
+            : 'Restart requested'
+      toast.success(actionLabel)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Gateway control failed')
     }
   }
 
@@ -537,6 +573,7 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
             const deployment = gateway.deployment || null
             const topology = topologyByGatewayId.get(gateway.id) || null
             const stats = topology?.stats || gateway.stats || null
+            const lifecycleState = gateway.lifecycleState || 'active'
             const topologyErrors = topology?.errors || []
             const pendingPairings = (stats?.pendingNodePairings || 0) + (stats?.pendingDevicePairings || 0)
             const topologyErrorCount = topologyErrors.length || stats?.lastTopologyErrorCount || 0
@@ -569,6 +606,9 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
                 {gateway.isDefault && (
                   <span className="text-[10px] font-700 px-2 py-0.5 rounded-[5px] bg-accent-bright/10 text-accent-bright uppercase tracking-wider">Default</span>
                 )}
+                <span className={`text-[10px] font-700 px-2 py-0.5 rounded-[5px] border uppercase tracking-wider ${gatewayLifecycleBadgeClass(lifecycleState)}`}>
+                  {gatewayLifecycleLabel(lifecycleState)}
+                </span>
                 <StatusDot
                   status={
                     gateway.status === 'healthy'
@@ -666,7 +706,40 @@ export function ProviderList({ inSidebar }: { inSidebar?: boolean }) {
               </div>
             )}
             {!inSidebar && (
-              <div className="mt-3 flex items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {lifecycleState !== 'active' ? (
+                  <button
+                    onClick={(e) => void handleGatewayControl(e, gateway.id, 'activate')}
+                    disabled={gatewayControlMutation.isPending}
+                    className="px-2.5 py-1.5 rounded-[8px] border border-emerald-400/20 bg-emerald-400/[0.06] text-[11px] font-700 text-emerald-200 hover:bg-emerald-400/[0.1] cursor-pointer transition-all disabled:opacity-40"
+                  >
+                    Activate
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={(e) => void handleGatewayControl(e, gateway.id, 'drain')}
+                      disabled={gatewayControlMutation.isPending}
+                      className="px-2.5 py-1.5 rounded-[8px] border border-amber-400/20 bg-amber-400/[0.06] text-[11px] font-700 text-amber-200 hover:bg-amber-400/[0.1] cursor-pointer transition-all disabled:opacity-40"
+                    >
+                      Drain
+                    </button>
+                    <button
+                      onClick={(e) => void handleGatewayControl(e, gateway.id, 'cordon')}
+                      disabled={gatewayControlMutation.isPending}
+                      className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all disabled:opacity-40"
+                    >
+                      Cordon
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={(e) => void handleGatewayControl(e, gateway.id, 'restart')}
+                  disabled={gatewayControlMutation.isPending}
+                  className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all disabled:opacity-40"
+                >
+                  Restart
+                </button>
                 <button onClick={(e) => void handleHealthCheckGateway(e, gateway.id)} className="px-2.5 py-1.5 rounded-[8px] border border-white/[0.08] bg-transparent text-[11px] font-700 text-text-2 hover:bg-white/[0.04] cursor-pointer transition-all">
                   Health
                 </button>

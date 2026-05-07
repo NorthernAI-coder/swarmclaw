@@ -644,6 +644,8 @@ export interface McpServerConfig {
 
 export type GatewayProvider = 'openclaw'
 export type GatewayHealthState = 'unknown' | 'healthy' | 'degraded' | 'offline' | 'pending'
+export type GatewayLifecycleState = 'active' | 'draining' | 'cordoned'
+export type GatewayControlAction = 'activate' | 'drain' | 'cordon' | 'restart'
 export type OpenClawDeploymentMethod = 'local' | 'bundle' | 'ssh' | 'imported'
 export type OpenClawDeploymentProvider =
   | 'local'
@@ -714,6 +716,16 @@ export interface GatewayProfile {
   wsUrl?: string | null
   credentialId?: string | null
   status: GatewayHealthState
+  lifecycleState?: GatewayLifecycleState
+  lastControlAction?: GatewayControlAction | null
+  lastControlActionAt?: number | null
+  lastControlReason?: string | null
+  controlRequest?: {
+    action: 'restart'
+    requestedAt: number
+    source: 'swarmclaw'
+    reason?: string | null
+  } | null
   notes?: string | null
   tags?: string[]
   lastError?: string | null

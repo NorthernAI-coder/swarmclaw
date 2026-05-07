@@ -65,6 +65,29 @@ function normalizeNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function normalizeGatewayLifecycleState(value: unknown): NonNullable<GatewayProfile['lifecycleState']> {
+  return value === 'draining' || value === 'cordoned' ? value : 'active'
+}
+
+function normalizeGatewayControlAction(value: unknown): GatewayProfile['lastControlAction'] {
+  return value === 'activate' || value === 'drain' || value === 'cordon' || value === 'restart'
+    ? value
+    : null
+}
+
+function normalizeGatewayControlRequest(value: unknown): GatewayProfile['controlRequest'] {
+  if (!value || typeof value !== 'object') return null
+  const request = value as Record<string, unknown>
+  const requestedAt = normalizeNullableNumber(request.requestedAt)
+  if (request.action !== 'restart' || !requestedAt) return null
+  return {
+    action: 'restart',
+    requestedAt,
+    source: 'swarmclaw',
+    reason: normalizeText(request.reason),
+  }
+}
+
 function normalizeGatewayDeployment(
   value: unknown,
 ): GatewayProfile['deployment'] {
@@ -109,6 +132,13 @@ function normalizeGatewayStats(value: unknown): GatewayProfile['stats'] {
     pairedDeviceCount: normalizeNullableNumber(stats.pairedDeviceCount) ?? undefined,
     pendingDevicePairings: normalizeNullableNumber(stats.pendingDevicePairings) ?? undefined,
     externalRuntimeCount: normalizeNullableNumber(stats.externalRuntimeCount) ?? undefined,
+    sessionCount: normalizeNullableNumber(stats.sessionCount) ?? undefined,
+    presenceCount: normalizeNullableNumber(stats.presenceCount) ?? undefined,
+    environmentCount: normalizeNullableNumber(stats.environmentCount) ?? undefined,
+    availableEnvironmentCount: normalizeNullableNumber(stats.availableEnvironmentCount) ?? undefined,
+    lastTopologyCheckedAt: normalizeNullableNumber(stats.lastTopologyCheckedAt) ?? undefined,
+    lastTopologyErrorCount: normalizeNullableNumber(stats.lastTopologyErrorCount) ?? undefined,
+    lastTopologyError: normalizeText(stats.lastTopologyError),
   }
 }
 
@@ -139,6 +169,11 @@ function normalizeGateway(raw: unknown, id: string): GatewayProfile | null {
     wsUrl: typeof gateway.wsUrl === 'string' && gateway.wsUrl.trim() ? gateway.wsUrl.trim() : deriveOpenClawWsUrl(endpoint),
     credentialId: typeof gateway.credentialId === 'string' && gateway.credentialId.trim() ? gateway.credentialId.trim() : null,
     status: gateway.status === 'healthy' || gateway.status === 'degraded' || gateway.status === 'offline' || gateway.status === 'pending' ? gateway.status : 'unknown',
+    lifecycleState: normalizeGatewayLifecycleState(gateway.lifecycleState),
+    lastControlAction: normalizeGatewayControlAction(gateway.lastControlAction),
+    lastControlActionAt: normalizeNullableNumber(gateway.lastControlActionAt),
+    lastControlReason: normalizeText(gateway.lastControlReason),
+    controlRequest: normalizeGatewayControlRequest(gateway.controlRequest),
     notes: typeof gateway.notes === 'string' ? gateway.notes : null,
     tags: ensureStringArray(gateway.tags),
     lastError: typeof gateway.lastError === 'string' ? gateway.lastError : null,
@@ -163,6 +198,18 @@ function findGatewayProfile(
   return gatewayProfiles.find((profile) => profile.id === id) || null
 }
 
+export function isGatewayAcceptingNewWork(gatewayProfile: GatewayProfile | null | undefined): boolean {
+  return normalizeGatewayLifecycleState(gatewayProfile?.lifecycleState) === 'active'
+}
+
+function findAcceptingGatewayProfile(
+  gatewayProfiles: GatewayProfile[],
+  profileId?: string | null,
+): GatewayProfile | null {
+  const gatewayProfile = findGatewayProfile(gatewayProfiles, profileId)
+  return isGatewayAcceptingNewWork(gatewayProfile) ? gatewayProfile : null
+}
+
 export function getGatewayProfiles(provider: GatewayProfile['provider'] | null = null): GatewayProfile[] {
   const all = loadGatewayProfiles()
   return Object.entries(all)
@@ -180,13 +227,15 @@ export function getGatewayProfile(profileId?: string | null): GatewayProfile | n
 }
 
 function defaultGatewayProfile(gatewayProfiles: GatewayProfile[]): GatewayProfile | null {
-  return gatewayProfiles.find((profile) => profile.isDefault) || gatewayProfiles[0] || null
+  const accepting = gatewayProfiles.filter(isGatewayAcceptingNewWork)
+  return accepting.find((profile) => profile.isDefault) || accepting[0] || null
 }
 
 function gatewayPreferenceScore(
   gatewayProfile: GatewayProfile,
   preferences?: GatewayRoutePreferences | null,
 ): number {
+  if (!isGatewayAcceptingNewWork(gatewayProfile)) return -1
   const normalized = normalizeRoutePreferences(preferences)
   const preferredTags = normalized.preferredGatewayTags || []
   const preferredUseCase = normalized.preferredGatewayUseCase || null
@@ -263,13 +312,15 @@ function buildRouteFromSeed(
     preferredGatewayTags: seed.preferredGatewayTags ?? routePreferences?.preferredGatewayTags,
     preferredGatewayUseCase: seed.preferredGatewayUseCase ?? routePreferences?.preferredGatewayUseCase,
   })
-  let gatewayProfile = findGatewayProfile(gatewayProfiles, seed.gatewayProfileId ?? null)
+  let gatewayProfile = findAcceptingGatewayProfile(gatewayProfiles, seed.gatewayProfileId ?? null)
   if (!gatewayProfile && provider === 'openclaw') {
     gatewayProfile = pickPreferredGatewayProfile(gatewayProfiles, mergedPreferences)
-      || findGatewayProfile(gatewayProfiles, agentGatewayProfileId ?? null)
+      || findAcceptingGatewayProfile(gatewayProfiles, agentGatewayProfileId ?? null)
       || defaultGatewayProfile(gatewayProfiles)
   }
-  const gatewayProfileId = gatewayProfile?.id ?? seed.gatewayProfileId ?? agentGatewayProfileId ?? null
+  const hasExplicitDirectEndpoint = typeof seed.apiEndpoint === 'string' && seed.apiEndpoint.trim().length > 0
+  if (provider === 'openclaw' && gatewayProfiles.length > 0 && !gatewayProfile && !hasExplicitDirectEndpoint) return null
+  const gatewayProfileId = gatewayProfile?.id ?? null
 
   const providerFromGateway = gatewayProfile?.provider === 'openclaw' ? 'openclaw' : provider
   const model = (seed.model || '').trim() || (providerFromGateway === 'openclaw' ? DEFAULT_OPENCLAW_MODEL : '')

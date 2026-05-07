@@ -27,6 +27,29 @@ function normalizeNullableNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
+function normalizeLifecycleState(value: unknown): NonNullable<GatewayProfile['lifecycleState']> {
+  return value === 'draining' || value === 'cordoned' ? value : 'active'
+}
+
+function normalizeControlAction(value: unknown): GatewayProfile['lastControlAction'] {
+  return value === 'activate' || value === 'drain' || value === 'cordon' || value === 'restart'
+    ? value
+    : null
+}
+
+function normalizeControlRequest(value: unknown): GatewayProfile['controlRequest'] {
+  if (!value || typeof value !== 'object') return null
+  const request = value as Record<string, unknown>
+  const requestedAt = normalizeNullableNumber(request.requestedAt)
+  if (request.action !== 'restart' || !requestedAt) return null
+  return {
+    action: 'restart',
+    requestedAt,
+    source: 'swarmclaw',
+    reason: normalizeText(request.reason),
+  }
+}
+
 function normalizeDeployment(value: unknown): OpenClawDeploymentConfig | null {
   if (!value || typeof value !== 'object') return null
   const deployment = value as Record<string, unknown>
@@ -106,6 +129,11 @@ export function createGatewayProfile(input: Record<string, unknown>): GatewayPro
     wsUrl: normalizeText(input.wsUrl),
     credentialId: normalizeText(input.credentialId),
     status: typeof input.status === 'string' && input.status.trim() ? input.status as GatewayProfile['status'] : 'unknown',
+    lifecycleState: normalizeLifecycleState(input.lifecycleState),
+    lastControlAction: normalizeControlAction(input.lastControlAction),
+    lastControlActionAt: normalizeNullableNumber(input.lastControlActionAt),
+    lastControlReason: normalizeText(input.lastControlReason),
+    controlRequest: normalizeControlRequest(input.controlRequest),
     notes: typeof input.notes === 'string' ? input.notes : null,
     tags: normalizeTags(input.tags),
     lastError: null,
@@ -149,6 +177,11 @@ export function updateGatewayProfile(id: string, input: Record<string, unknown>)
       : 'unknown'
     gateway.status = nextStatus
   }
+  if (input.lifecycleState !== undefined) gateway.lifecycleState = normalizeLifecycleState(input.lifecycleState)
+  if (input.lastControlAction !== undefined) gateway.lastControlAction = normalizeControlAction(input.lastControlAction)
+  if (input.lastControlActionAt !== undefined) gateway.lastControlActionAt = normalizeNullableNumber(input.lastControlActionAt)
+  if (input.lastControlReason !== undefined) gateway.lastControlReason = normalizeText(input.lastControlReason)
+  if (input.controlRequest !== undefined) gateway.controlRequest = normalizeControlRequest(input.controlRequest)
   if (input.notes !== undefined) gateway.notes = typeof input.notes === 'string' ? input.notes : null
   if (input.tags !== undefined) gateway.tags = normalizeTags(input.tags)
   if (input.lastError !== undefined) gateway.lastError = typeof input.lastError === 'string' ? input.lastError : null
@@ -160,6 +193,44 @@ export function updateGatewayProfile(id: string, input: Record<string, unknown>)
   if (input.stats !== undefined) gateway.stats = { ...(gateway.stats || {}), ...(normalizeStats(input.stats) || {}) }
   if (input.isDefault !== undefined) gateway.isDefault = input.isDefault === true
   gateway.updatedAt = Date.now()
+
+  gateways[id] = gateway
+  saveGatewayProfiles(gateways)
+  notify('gateways')
+  return gateway
+}
+
+export function controlGatewayProfile(
+  id: string,
+  input: { action: NonNullable<GatewayProfile['lastControlAction']>; reason?: string | null },
+  now = Date.now(),
+): GatewayProfile | null {
+  const gateways = loadGatewayProfiles()
+  const gateway = gateways[id]
+  if (!gateway) return null
+
+  const action = normalizeControlAction(input.action)
+  if (!action) return null
+
+  gateway.lifecycleState = action === 'drain'
+    ? 'draining'
+    : action === 'cordon'
+      ? 'cordoned'
+      : action === 'activate'
+        ? 'active'
+        : normalizeLifecycleState(gateway.lifecycleState)
+  gateway.lastControlAction = action
+  gateway.lastControlActionAt = now
+  gateway.lastControlReason = normalizeText(input.reason)
+  gateway.controlRequest = action === 'restart'
+    ? {
+        action: 'restart',
+        requestedAt: now,
+        source: 'swarmclaw',
+        reason: normalizeText(input.reason),
+      }
+    : null
+  gateway.updatedAt = now
 
   gateways[id] = gateway
   saveGatewayProfiles(gateways)

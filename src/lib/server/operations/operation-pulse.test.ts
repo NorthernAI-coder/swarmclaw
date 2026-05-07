@@ -88,6 +88,11 @@ function gateway(overrides: Partial<GatewayProfile>): GatewayProfile {
     wsUrl: overrides.wsUrl ?? null,
     credentialId: overrides.credentialId ?? null,
     status: overrides.status || 'healthy',
+    lifecycleState: overrides.lifecycleState || 'active',
+    lastControlAction: overrides.lastControlAction ?? null,
+    lastControlActionAt: overrides.lastControlActionAt ?? null,
+    lastControlReason: overrides.lastControlReason ?? null,
+    controlRequest: overrides.controlRequest ?? null,
     notes: overrides.notes ?? null,
     tags: overrides.tags || [],
     lastError: overrides.lastError ?? null,
@@ -189,5 +194,34 @@ describe('operation pulse', () => {
     assert.equal(pulse.actions[0]?.severity, 'high')
     assert.ok((pulse.actions[0]?.summary || '').includes('no available OpenClaw execution environments'))
     assert.equal(pulse.actions[0]?.evidence.includes('0/2 environments'), true)
+  })
+
+  it('surfaces gateways that are unavailable for automatic new work', () => {
+    const pulse = buildOperationPulse({
+      range: '24h',
+      now,
+      missions: [],
+      runs: [],
+      approvals: [],
+      connectors: [],
+      gateways: [
+        gateway({
+          lifecycleState: 'cordoned',
+          stats: {
+            nodeCount: 1,
+            connectedNodeCount: 1,
+            environmentCount: 1,
+            availableEnvironmentCount: 1,
+            lastTopologyCheckedAt: now - 1000,
+          },
+        }),
+      ],
+    })
+
+    assert.equal(pulse.kpis.gatewayAttention, 1)
+    assert.equal(pulse.actions[0]?.kind, 'gateway')
+    assert.equal(pulse.actions[0]?.severity, 'medium')
+    assert.ok((pulse.actions[0]?.summary || '').includes('cordoned from automatic new work'))
+    assert.equal(pulse.actions[0]?.evidence.includes('lifecycle:cordoned'), true)
   })
 })

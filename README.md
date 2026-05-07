@@ -151,13 +151,13 @@ clawhub install swarmclaw
 
 [Browse on ClawHub](https://clawhub.ai/skills/swarmclaw)
 
-## v1.9.23 Highlights
+## v1.9.24 Highlights
 
-Schedule reliability is now more deterministic for recurring autonomous work, especially after restarts or stale stored timing state.
+Gateway lifecycle controls and Slack peer-agent collaboration are now safer for multi-agent operations.
 
-- **Cron drift repair.** Active schedules repair stale future cron slots before they skip the nearest run.
-- **Stable stagger.** Staggered schedules keep a deterministic per-schedule offset.
-- **Mission continuity.** Schedule-created board tasks keep a persistent mission link across recurring runs.
+- **Gateway lifecycle controls.** Providers can activate, drain, cordon, or request restart for saved OpenClaw gateways.
+- **Routing guardrails.** New OpenClaw work skips draining or cordoned gateway profiles, and Operations Pulse flags unavailable gateways.
+- **Slack peer messages.** Peer bot messages now reach the existing connector policy gates while self-loop messages are still blocked.
 
 ## Hosted Deploys
 
@@ -408,6 +408,15 @@ If you need a trace-specific endpoint, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 
 Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
+
+### v1.9.24 Highlights
+
+Gateway lifecycle release: saved OpenClaw gateways now have explicit operator lifecycle controls, automatic routing avoids gateways that should not receive new work, and Slack peer-agent messages flow through the existing connector policy gates.
+
+- **Gateway lifecycle controls.** Providers can activate, drain, cordon, and request restart for saved OpenClaw gateway profiles.
+- **Routing guardrails.** OpenClaw route selection skips draining and cordoned profiles, including default, preferred, and pinned gateway paths.
+- **Operations Pulse awareness.** Cordoned and draining gateways now appear as operator attention items before they surprise a handoff or release check.
+- **Slack peer collaboration.** Slack peer-bot messages are no longer dropped before group policy, mention, and self-loop protections run.
 
 ### v1.9.23 Highlights
 
