@@ -108,9 +108,5 @@ export function deriveTerminalRunError(params: {
     return params.streamErrors[params.streamErrors.length - 1]
   }
 
-  if (!params.internal && !params.fullResponse.trim() && params.toolEvents.length === 0) {
-    return 'Run completed without any response text, tool calls, or explicit error details. Check the provider configuration and try again.'
-  }
-
   return undefined
 }

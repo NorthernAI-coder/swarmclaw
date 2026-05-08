@@ -184,7 +184,7 @@ describe('deriveTerminalRunError', () => {
     )
   })
 
-  it('converts empty successful runs into a visible assistant error', () => {
+  it('does not convert empty successful runs into a visible assistant error', () => {
     assert.equal(
       deriveTerminalRunError({
         errorMessage: undefined,
@@ -193,7 +193,7 @@ describe('deriveTerminalRunError', () => {
         toolEvents: [],
         internal: false,
       }),
-      'Run completed without any response text, tool calls, or explicit error details. Check the provider configuration and try again.',
+      undefined,
     )
   })
 

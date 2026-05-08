@@ -240,15 +240,14 @@ describe('deriveTerminalRunError advanced', () => {
     assert.equal(err, undefined)
   })
 
-  it('generates user-friendly error for empty everything (non-internal)', () => {
+  it('returns undefined for empty successful non-internal runs', () => {
     const err = deriveTerminalRunError({
       fullResponse: '',
       streamErrors: [],
       toolEvents: [],
       internal: false,
     })
-    assert.ok(err)
-    assert.ok(err.includes('Check the provider configuration'))
+    assert.equal(err, undefined)
   })
 
   it('uses errorMessage directly when provided', () => {

@@ -151,14 +151,14 @@ clawhub install swarmclaw
 
 [Browse on ClawHub](https://clawhub.ai/skills/swarmclaw)
 
-## v1.9.25 Highlights
+## v1.9.26 Highlights
 
-Gateway lifecycle controls and Slack peer-agent collaboration are now safer for multi-agent operations.
+Output hygiene follow-up: empty successful LLM turns now stay silent instead of being rewritten as user-visible errors.
 
-- **Gateway lifecycle controls.** Providers can activate, drain, cordon, or request restart for saved OpenClaw gateways.
-- **Routing guardrails.** New OpenClaw work skips draining or cordoned gateway profiles, and Operations Pulse flags unavailable gateways.
-- **CLI lifecycle access.** `swarmclaw gateways activate`, `drain`, `cordon`, and `restart` now reach the same lifecycle control endpoint as the provider UI.
-- **Slack peer messages.** Peer bot messages now reach the existing connector policy gates while self-loop messages are still blocked.
+- **Silent empty completions.** Blank successful runs no longer become `Error: Run completed...` assistant messages.
+- **Connector-safe final text.** Slack and other connectors no longer receive synthetic error text for intentional silence or quiet no-op turns.
+- **Real errors preserved.** Explicit provider failures and streamed provider errors still surface as terminal errors.
+- **Regression coverage.** Chat-execution tests now lock the distinction between empty success and real failure.
 
 ## Hosted Deploys
 
@@ -409,6 +409,15 @@ If you need a trace-specific endpoint, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 
 Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
+
+### v1.9.26 Highlights
+
+Output hygiene follow-up: empty successful LLM turns now stay silent instead of being rewritten as user-visible errors.
+
+- **Silent empty completions.** Blank successful runs no longer become `Error: Run completed...` assistant messages.
+- **Connector-safe final text.** Slack and other connectors no longer receive synthetic error text for intentional silence or quiet no-op turns.
+- **Real errors preserved.** Explicit provider failures and streamed provider errors still surface as terminal errors.
+- **Regression coverage.** Chat-execution tests now lock the distinction between empty success and real failure.
 
 ### v1.9.25 Highlights
 
