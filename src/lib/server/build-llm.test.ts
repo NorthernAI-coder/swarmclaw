@@ -250,6 +250,47 @@ test('buildChatModel disables parallel_tool_calls for Ollama local to avoid dupl
   assert.equal(llm.clientConfig?.baseURL, 'http://localhost:11434/v1')
 })
 
+test('buildChatModel passes JSON format mode only to local Ollama structured calls', () => {
+  const local = buildChatModel({
+    provider: 'ollama',
+    model: 'gemma4:e4b',
+    ollamaMode: 'local',
+    apiKey: null,
+    responseFormat: 'json_object',
+  }) as ChatOpenAI & { modelKwargs?: Record<string, unknown> }
+
+  assert.equal(local.modelKwargs?.parallel_tool_calls, false)
+  assert.equal(local.modelKwargs?.format, 'json')
+
+  saveCredentials({
+    'cred-ollama-cloud-json': {
+      id: 'cred-ollama-cloud-json',
+      provider: 'ollama',
+      name: 'Ollama Cloud',
+      encryptedKey: encryptKey('ollama-cloud-key'),
+      createdAt: Date.now(),
+    },
+  } as Record<string, {
+    id: string
+    provider: string
+    name: string
+    encryptedKey: string
+    createdAt: number
+  }>)
+
+  const cloud = buildChatModel({
+    provider: 'ollama',
+    model: 'glm-5:cloud',
+    ollamaMode: 'cloud',
+    apiKey: null,
+    credentialId: 'cred-ollama-cloud-json',
+    responseFormat: 'json_object',
+  }) as ChatOpenAI & { modelKwargs?: Record<string, unknown> }
+
+  assert.equal(cloud.modelKwargs?.parallel_tool_calls, false)
+  assert.equal(cloud.modelKwargs?.format, undefined)
+})
+
 test('buildChatModel uses a reasoning_content-preserving bridge for DeepSeek', () => {
   const llm = buildChatModel({
     provider: 'deepseek',

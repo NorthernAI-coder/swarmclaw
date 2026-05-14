@@ -18,6 +18,7 @@ const OLLAMA_CLOUD_URL = 'https://ollama.com/v1'
 const OLLAMA_LOCAL_URL = 'http://localhost:11434/v1'
 export const OPENAI_COMPAT_MODEL_TIMEOUT_MS = 180_000
 export const OPENAI_COMPAT_MODEL_MAX_RETRIES = 2
+export type GenerationResponseFormat = 'json_object'
 
 export interface GenerationModelPreference {
   provider?: string | null
@@ -27,6 +28,7 @@ export interface GenerationModelPreference {
   apiEndpoint?: string | null
   gatewayProfileId?: string | null
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high' | null
+  responseFormat?: GenerationResponseFormat | null
 }
 
 interface ResolvedGenerationModelConfig {
@@ -36,6 +38,7 @@ interface ResolvedGenerationModelConfig {
   apiKey: string | null
   apiEndpoint: string | null
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+  responseFormat?: GenerationResponseFormat
 }
 
 type OpenAiReasoningEffort = 'low' | 'medium' | 'high'
@@ -43,6 +46,7 @@ type ChatOpenAiConfig = ConstructorParameters<typeof ChatOpenAI>[0] & {
   modelKwargs?: {
     reasoning_effort?: OpenAiReasoningEffort
     parallel_tool_calls?: boolean
+    format?: 'json'
   }
   configuration?: {
     baseURL?: string
@@ -68,8 +72,9 @@ export function buildChatModel(opts: {
   credentialId?: string | null
   apiEndpoint?: string | null
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high'
+  responseFormat?: GenerationResponseFormat
 }) {
-  const { provider, model, ollamaMode, apiKey, credentialId, apiEndpoint, thinkingLevel } = opts
+  const { provider, model, ollamaMode, apiKey, credentialId, apiEndpoint, thinkingLevel, responseFormat } = opts
   const resolvedCredentialId = resolveProviderCredentialId({ provider, ollamaMode: ollamaMode ?? null, credentialId })
   const resolvedApiKey = apiKey ?? resolveApiKeyFromCredential(resolvedCredentialId)
   const providers = getProviderList()
@@ -118,7 +123,10 @@ export function buildChatModel(opts: {
       timeout: OPENAI_COMPAT_MODEL_TIMEOUT_MS,
       maxRetries: OPENAI_COMPAT_MODEL_MAX_RETRIES,
       configuration: { baseURL },
-      modelKwargs: { parallel_tool_calls: false },
+      modelKwargs: {
+        parallel_tool_calls: false,
+        ...(responseFormat === 'json_object' && !runtime.useCloud ? { format: 'json' as const } : {}),
+      },
     })
   }
 
@@ -222,6 +230,7 @@ function resolvePreferredGenerationConfig(
       apiKey,
       apiEndpoint,
       thinkingLevel: candidate.thinkingLevel || undefined,
+      responseFormat: candidate.responseFormat || undefined,
     }
   }
   return null
@@ -232,6 +241,7 @@ export function resolveGenerationModelConfig(options?: {
   sessionId?: string | null
   agentId?: string | null
   excludeProviders?: string[]
+  responseFormat?: GenerationResponseFormat
 }): ResolvedGenerationModelConfig {
   const providers = getProviderList()
   const excludeProviders = new Set((options?.excludeProviders || []).map((value) => normalizePreferenceValue(value)).filter(Boolean))
@@ -252,7 +262,9 @@ export function resolveGenerationModelConfig(options?: {
     ...getAgentGenerationPreferences(sessionAgent),
     ...getAgentGenerationPreferences(directAgent),
   ], excludeProviders)
-  if (resolved) return resolved
+  if (resolved) return options?.responseFormat
+    ? { ...resolved, responseFormat: options.responseFormat }
+    : resolved
 
   const sessionLabel = options?.sessionId ? `session "${options.sessionId}"` : null
   const agentLabel = options?.agentId ? `agent "${options.agentId}"` : null
@@ -271,6 +283,7 @@ export async function buildLLM(options?: {
   sessionId?: string | null
   agentId?: string | null
   excludeProviders?: string[]
+  responseFormat?: GenerationResponseFormat
 }) {
   const resolved = resolveGenerationModelConfig(options)
   return {

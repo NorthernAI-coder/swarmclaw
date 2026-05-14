@@ -1,9 +1,10 @@
 import crypto from 'crypto'
+import { z } from 'zod'
 import type { DreamCycle, DreamCycleResult, DreamConfig, DreamTrigger, Agent } from '@/types'
 import { DEFAULT_DREAM_CONFIG } from '@/types/dream'
 import { getMemoryDb } from '@/lib/server/memory/memory-db'
 import { saveDreamCycle } from '@/lib/server/memory/dream-cycles'
-import { errorMessage, safeJsonParse } from '@/lib/shared-utils'
+import { errorMessage } from '@/lib/shared-utils'
 import { log } from '@/lib/server/logger'
 
 const TAG = 'dream-service'
@@ -102,6 +103,70 @@ interface Tier2Response {
   flagged?: Tier2Flagged[]
 }
 
+const Tier2ResponseSchema = z.object({
+  consolidations: z.array(z.object({
+    sourceIds: z.array(z.string()),
+    title: z.string(),
+    content: z.string(),
+  })).optional(),
+  reflections: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+  })).optional(),
+  flagged: z.array(z.object({
+    memoryId: z.string(),
+    reason: z.string(),
+  })).optional(),
+}).passthrough()
+
+function findBalancedJsonObjectEnd(text: string, start: number): number {
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === '{') depth += 1
+    else if (char === '}') depth -= 1
+    if (depth === 0) return index + 1
+  }
+  return -1
+}
+
+function extractFirstBalancedJsonObject(text: string): string | null {
+  const source = String(text || '')
+  for (let index = 0; index < source.length; index += 1) {
+    if (source[index] !== '{') continue
+    const end = findBalancedJsonObjectEnd(source, index)
+    if (end === -1) return null
+    return source.slice(index, end)
+  }
+  return null
+}
+
+export function parseTier2DreamResponseText(text: string): Tier2Response | null {
+  const jsonText = extractFirstBalancedJsonObject(text)
+  if (!jsonText) return null
+  let raw: unknown
+  try {
+    raw = JSON.parse(jsonText)
+  } catch {
+    return null
+  }
+  const parsed = Tier2ResponseSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
 export async function runTier2Dream(
   agentId: string,
   config: DreamConfig,
@@ -149,7 +214,7 @@ ${memoryLines.join('\n')}`
 
   try {
     const { buildLLM } = await import('@/lib/server/build-llm')
-    const { llm } = await buildLLM({ agentId })
+    const { llm } = await buildLLM({ agentId, responseFormat: 'json_object' })
     const { HumanMessage } = await import('@langchain/core/messages')
 
     const response = await llm.invoke([new HumanMessage(prompt)])
@@ -159,9 +224,10 @@ ${memoryLines.join('\n')}`
         ? response.content.map((b) => ('text' in b && typeof b.text === 'string' ? b.text : '')).join('')
         : ''
 
-    // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    const parsed = safeJsonParse<Tier2Response>(jsonMatch?.[0] ?? '', {})
+    const parsed = parseTier2DreamResponseText(text) ?? {}
+    if (!parsed.consolidations && !parsed.reflections && !parsed.flagged) {
+      errors.push('Tier 2 dream response was not valid structured JSON.')
+    }
 
     // Process consolidations
     if (Array.isArray(parsed.consolidations)) {

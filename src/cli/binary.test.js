@@ -199,6 +199,12 @@ test('binary -v alias output matches package version', () => {
   assert.equal(result.stdout.trim(), `${PACKAGE_JSON.name} ${PACKAGE_JSON.version}`)
 })
 
+test('package ships dagre type declarations required by installed builds', () => {
+  assert.equal(PACKAGE_JSON.dependencies.dagre, '^0.8.5')
+  assert.equal(PACKAGE_JSON.dependencies['@types/dagre'], '^0.7.54')
+  assert.equal(PACKAGE_JSON.devDependencies?.['@types/dagre'], undefined)
+})
+
 test('legacy TS launcher falls back to tsx import when strip-types is unavailable', () => {
   const cliPath = path.join(APP_ROOT, 'src', 'cli', 'index.ts')
   const args = buildLegacyTsCliArgs(cliPath, ['runs', 'list'], {

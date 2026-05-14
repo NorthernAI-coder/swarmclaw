@@ -151,15 +151,14 @@ clawhub install swarmclaw
 
 [Browse on ClawHub](https://clawhub.ai/skills/swarmclaw)
 
-## v1.9.28 Highlights
+## v1.9.29 Highlights
 
-Issue-fix release for installed CLI groups, email bridge TLS handling, built-in model overrides, and Windows desktop native modules.
+Issue-fix release for Edit Agent tooltips, installed package builds, and structured dream output on local Ollama models.
 
-- **Installed CLI groups.** Global npm installs route legacy API-backed group commands through the bundled TS runtime when installed under `node_modules`, avoiding Node 22.6+/25 type-stripping failures.
-- **Email bridge TLS resilience.** The email connector logs IMAP socket errors without crashing the daemon and supports `tlsRejectUnauthorized=false` for local self-signed IMAP/SMTP servers.
-- **Provider model override persistence.** Built-in provider live model saves now reload array-valued overrides instead of falling back to catalog defaults.
-- **Windows desktop native modules.** Desktop packaging syncs rebuilt Electron-native modules into traced `.next/node_modules` aliases so packaged Windows installs start against the correct ABI.
-- **Regression coverage.** CLI, email, provider route, and Electron after-pack tests cover the reported failure modes.
+- **Edit Agent tooltips.** Help tips in the Edit Agent sheet now render above modal layers instead of being hidden behind the dialog.
+- **Installed package builds.** The npm package now ships the Dagre type declarations needed by `swarmclaw server --build`.
+- **Local Ollama dream output.** Structured dream/reflection calls request Ollama JSON mode and validate balanced JSON before writing memories.
+- **Regression coverage.** CLI/package, model-build, and dream-parser tests cover the reported failure modes.
 
 ## Hosted Deploys
 
@@ -410,6 +409,15 @@ If you need a trace-specific endpoint, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 
 Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
+
+### v1.9.29 Highlights
+
+Issue-fix release for Edit Agent tooltips, installed package builds, and structured dream output on local Ollama models.
+
+- **Edit Agent tooltips.** Help tips in the Edit Agent sheet now render above modal layers instead of being hidden behind the dialog.
+- **Installed package builds.** The npm package now ships the Dagre type declarations needed by `swarmclaw server --build`.
+- **Local Ollama dream output.** Structured dream/reflection calls request Ollama JSON mode and validate balanced JSON before writing memories.
+- **Regression coverage.** CLI/package, model-build, and dream-parser tests cover the reported failure modes.
 
 ### v1.9.28 Highlights
 
