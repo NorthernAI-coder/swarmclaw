@@ -67,8 +67,8 @@ export interface ProtocolBuilderState {
   redoStack: UndoSnapshot[]
   activeRunId: string | null
 
-  setNodes: (nodes: BuilderNode[]) => void
-  setEdges: (edges: BuilderEdge[]) => void
+  setNodes: (nodes: BuilderNode[], options?: { markDirty?: boolean }) => void
+  setEdges: (edges: BuilderEdge[], options?: { markDirty?: boolean }) => void
   selectNode: (nodeId: string | null) => void
   selectEdge: (edgeId: string | null) => void
   updateNodeData: (nodeId: string, data: Partial<BuilderNodeData>) => void
@@ -110,8 +110,8 @@ export const useProtocolBuilderStore = create<ProtocolBuilderState>()(
     (set, get) => ({
       ...initialState,
 
-      setNodes: (nodes) => set({ nodes, isDirty: true }),
-      setEdges: (edges) => set({ edges, isDirty: true }),
+      setNodes: (nodes, options) => set({ nodes, isDirty: options?.markDirty ?? true }),
+      setEdges: (edges, options) => set({ edges, isDirty: options?.markDirty ?? true }),
 
       selectNode: (nodeId) =>
         set({ selectedNodeId: nodeId, selectedEdgeId: null }),

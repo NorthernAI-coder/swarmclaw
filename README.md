@@ -151,6 +151,14 @@ openclaw skills install swarmclaw
 
 [Browse on ClawHub](https://clawhub.ai/waydelyle/swarmclaw)
 
+## v1.9.36 Highlights
+
+Protocol builder visibility release for built-in Structured Sessions.
+
+- **Built-in flow inspector.** Built-in protocol templates now open in a full-size visual builder canvas with a read-only template step panel.
+- **Canvas viewport repair.** Builder routes now claim the full dashboard workspace and refit React Flow after async template loads.
+- **Regression coverage.** Browser smoke now verifies that the built-in facilitated discussion graph renders with visible flow nodes.
+
 ## v1.9.35 Highlights
 
 Installed package build fix for fresh npm-global installs and upgrades.
@@ -461,6 +469,14 @@ If you need a trace-specific endpoint, set `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 
 Operational docs: https://swarmclaw.ai/docs/observability
 
 ## Releases
+
+### v1.9.36 Highlights
+
+Protocol builder visibility release for built-in Structured Sessions.
+
+- **Built-in flow inspector.** Built-in protocol templates now open in a full-size visual builder canvas with a read-only template step panel.
+- **Canvas viewport repair.** Builder routes now claim the full dashboard workspace and refit React Flow after async template loads.
+- **Regression coverage.** Browser smoke now verifies that the built-in facilitated discussion graph renders with visible flow nodes.
 
 ### v1.9.35 Highlights
 

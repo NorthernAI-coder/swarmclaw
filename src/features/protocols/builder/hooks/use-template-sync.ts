@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useProtocolBuilderStore } from '../protocol-builder-store'
 import { useUpsertProtocolTemplateMutation, type ProtocolTemplatePayload } from '@/features/protocols/queries'
 import { nodesToTemplate } from '../utils/nodes-to-template'
+import { isBuilderTemplateReadOnly } from '../utils/builder-template-access'
 
 export function useTemplateSync(autoSaveDelayMs = 2000) {
   const nodes = useProtocolBuilderStore((s) => s.nodes)
@@ -15,6 +16,10 @@ export function useTemplateSync(autoSaveDelayMs = 2000) {
 
   useEffect(() => {
     if (!isDirty || !currentTemplate || validationErrors.length > 0) return
+    if (isBuilderTemplateReadOnly(currentTemplate)) {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      return
+    }
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
 

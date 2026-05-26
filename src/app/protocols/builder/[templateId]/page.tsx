@@ -43,7 +43,7 @@ export default function ProtocolBuilderPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 items-center justify-center">
         <div className="text-sm text-muted-foreground">Loading builder...</div>
       </div>
     )
@@ -52,7 +52,7 @@ export default function ProtocolBuilderPage() {
   const template = templates?.find((t) => t.id === templateId)
   if (!template) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-3">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3">
         <div className="text-sm text-muted-foreground">Template not found</div>
         <button
           onClick={() => router.push('/protocols')}
@@ -65,9 +65,9 @@ export default function ProtocolBuilderPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-2">
+      <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/protocols')}
@@ -85,7 +85,7 @@ export default function ProtocolBuilderPage() {
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 p-3">
+      <div className="min-h-0 flex-1 p-3">
         <ProtocolBuilderCanvas />
       </div>
     </div>

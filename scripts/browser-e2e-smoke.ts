@@ -360,6 +360,31 @@ async function runBrowserSmoke(baseUrl: string): Promise<void> {
     await page.close()
 
     page = await newSmokePage()
+    await smokeStep('built-in protocol builder visual flow loads', async () => {
+      await waitForPageText(page, '/protocols/builder/facilitated_discussion', {
+        anyText: ['Facilitated Discussion', 'Built-in template'],
+      })
+      await page.waitForFunction(() => {
+        const flow = document.querySelector('.react-flow')
+        const flowRect = flow?.getBoundingClientRect()
+        const visibleNodes = Array.from(document.querySelectorAll('.react-flow__node'))
+          .filter((node) => {
+            const rect = node.getBoundingClientRect()
+            return rect.width > 40 && rect.height > 20
+          })
+        const text = document.body?.innerText || ''
+        return Boolean(
+          flowRect
+          && flowRect.width > 320
+          && flowRect.height > 240
+          && visibleNodes.length >= 3
+          && !text.includes('No visual steps'),
+        )
+      }, { timeout: PAGE_TIMEOUT_MS })
+    })
+    await page.close()
+
+    page = await newSmokePage()
     await smokeStep('schedule history tab is available', async () => {
       await waitForPageText(page, '/schedules', { anyText: ['Schedule Console', 'SCHEDULE CONSOLE'] })
       await page.waitForFunction(() => {
